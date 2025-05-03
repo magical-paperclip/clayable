@@ -1,0 +1,68 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background-color: #111;
+}
+
+#container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#info {
+    position: absolute;
+    top: 10px;
+    width: 100%;
+    text-align: center;
+    color: white;
+    z-index: 100;
+    pointer-events: none;
+}
+
+#info h1, #info p {
+    pointer-events: none;
+}
+
+h1 {
+    font-size: 24px;
+    margin-bottom: 5px;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+p {
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+/* Clay tool buttons */
+.tools {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.tools button {
+    background-color: rgba(50, 50, 50, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.tools button:hover {
+    background-color: rgba(80, 80, 80, 0.8);
+}
+
+.tools button.active {
+    background-color: rgba(228, 194, 145, 0.6); /* Clay color */
+    box-shadow: 0 0 10px rgba(228, 194, 145, 0.4);
+}
