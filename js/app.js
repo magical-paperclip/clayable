@@ -1,4 +1,3 @@
-// Main application
 let container;
 let camera, scene, renderer;
 let controls;
@@ -7,8 +6,7 @@ let isMouseDown = false;
 let lastMousePosition = new THREE.Vector2();
 let clock = new THREE.Clock();
 
-// Clay parameters
-let clayColor = 0xe8c291; // Default light clay color
+let clayColor = 0xe8c291;
 const clayColors = {
     'Classic Clay': 0xe8c291,
     'Blue Clay': 0x4a87b3,
@@ -17,9 +15,8 @@ const clayColors = {
     'Purple Clay': 0x9370db,
     'Gray Clay': 0x808080
 };
-let mouseMode = 'add'; // 'add', 'remove', or 'smooth'
+let mouseMode = 'add';
 
-// Specialized tools parameters
 const specializedTools = {
     'stamp-sphere': { name: 'Sphere Stamp', size: 15, shape: 'sphere' },
     'stamp-cube': { name: 'Cube Stamp', size: 12, shape: 'cube' },
@@ -28,35 +25,29 @@ const specializedTools = {
     'tool-flatten': { name: 'Flatten Tool', size: 18, strength: 0.8 }
 };
 let activeSpecialTool = null;
-let toolSize = 10; // Default tool size
+let toolSize = 10;
 
-// Clay particles
 const maxParticles = 500;
 let particleCount = 0;
 let particles = [];
 let clayMesh;
 
-// UI elements for clay manipulation
 let uiInfo;
 
 init();
 animate();
 
 function init() {
-    // Set up the container
     container = document.getElementById('container');
     
-    // Create the scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111);
     
-    // Create the camera
     const width = window.innerWidth;
     const height = window.innerHeight;
     camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
     camera.position.set(0, 0, 500);
     
-    // Add soft lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
     scene.add(ambientLight);
     
@@ -64,51 +55,45 @@ function init() {
     directionalLight.position.set(1, 1, 1).normalize();
     scene.add(directionalLight);
     
-    // Add a soft light from the bottom for better clay feel
-    const bottomLight = new THREE.DirectionalLight(0xffc0cb, 0.3); // Soft pink light
+    const bottomLight = new THREE.DirectionalLight(0xffc0cb, 0.3);
     bottomLight.position.set(0, -1, 0).normalize();
     scene.add(bottomLight);
     
-    // Create the clay blob using particle system
     createClayParticles();
     
-    // Create the renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(width, height);
     container.appendChild(renderer.domElement);
     
-    // Add controls for camera manipulation
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.rotateSpeed = 0.5;
     
-    // Create UI elements for clay tools
     createUI();
     
-    // Set up event listeners
     window.addEventListener('resize', onWindowResize);
     
-    // Mouse interaction
     container.addEventListener('mousemove', onMouseMove);
     container.addEventListener('mousedown', () => { isMouseDown = true; });
     container.addEventListener('mouseup', () => { isMouseDown = false; });
     
-    // Touch interaction
     container.addEventListener('touchmove', onTouchMove);
     container.addEventListener('touchstart', () => { isMouseDown = true; });
     container.addEventListener('touchend', () => { isMouseDown = false; });
     
-    // Keyboard controls
     window.addEventListener('keydown', onKeyDown);
 }
 
 function createUI() {
-    // Create UI for clay manipulation
     uiInfo = document.getElementById('ui-container');
     
-    // Add basic tool buttons
+    const toolsLabel = document.createElement('div');
+    toolsLabel.className = 'tools-label';
+    toolsLabel.textContent = 'Basic Tools';
+    uiInfo.appendChild(toolsLabel);
+    
     const toolsDiv = document.createElement('div');
     toolsDiv.className = 'tools';
     
@@ -145,21 +130,21 @@ function createUI() {
     
     uiInfo.appendChild(toolsDiv);
     
-    // Add specialized tools section
+    const divider1 = document.createElement('div');
+    divider1.className = 'section-divider';
+    uiInfo.appendChild(divider1);
+    
     const specialToolsDiv = document.createElement('div');
     specialToolsDiv.className = 'special-tools';
     
-    // Add label for specialized tools
     const specialToolsLabel = document.createElement('div');
     specialToolsLabel.className = 'tools-label';
     specialToolsLabel.textContent = 'Specialized Tools';
     specialToolsDiv.appendChild(specialToolsLabel);
     
-    // Create specialized tool buttons
     const specialButtonsDiv = document.createElement('div');
     specialButtonsDiv.className = 'tool-buttons';
     
-    // Add buttons for each specialized tool
     Object.entries(specializedTools).forEach(([id, tool]) => {
         const toolButton = document.createElement('button');
         toolButton.textContent = tool.name;
@@ -170,13 +155,15 @@ function createUI() {
     
     specialToolsDiv.appendChild(specialButtonsDiv);
     
-    // Add tool size slider
     const sizeControlDiv = document.createElement('div');
     sizeControlDiv.className = 'size-control';
     
     const sizeLabel = document.createElement('label');
     sizeLabel.textContent = 'Tool Size';
     sizeLabel.htmlFor = 'tool-size';
+    
+    const sliderContainer = document.createElement('div');
+    sliderContainer.className = 'slider-container';
     
     const sizeSlider = document.createElement('input');
     sizeSlider.type = 'range';
@@ -193,35 +180,36 @@ function createUI() {
     sizeValue.textContent = toolSize;
     sizeValue.id = 'size-value';
     
+    sliderContainer.appendChild(sizeSlider);
+    sliderContainer.appendChild(sizeValue);
+    
     sizeControlDiv.appendChild(sizeLabel);
-    sizeControlDiv.appendChild(sizeSlider);
-    sizeControlDiv.appendChild(sizeValue);
+    sizeControlDiv.appendChild(sliderContainer);
     
     specialToolsDiv.appendChild(sizeControlDiv);
     uiInfo.appendChild(specialToolsDiv);
     
-    // Add color selection
+    const divider2 = document.createElement('div');
+    divider2.className = 'section-divider';
+    uiInfo.appendChild(divider2);
+    
     const colorsDiv = document.createElement('div');
     colorsDiv.className = 'colors';
     
-    // Add a label for the color section
     const colorLabel = document.createElement('div');
     colorLabel.className = 'color-label';
     colorLabel.textContent = 'Clay Color';
     colorsDiv.appendChild(colorLabel);
     
-    // Create color buttons
     const colorButtonsDiv = document.createElement('div');
     colorButtonsDiv.className = 'color-buttons';
     
-    // Add a button for each clay color
     Object.entries(clayColors).forEach(([name, colorValue]) => {
         const colorButton = document.createElement('button');
         colorButton.className = 'color-btn';
         colorButton.title = name;
         colorButton.style.backgroundColor = '#' + colorValue.toString(16).padStart(6, '0');
         
-        // Mark the default color as selected
         if (colorValue === clayColor) {
             colorButton.classList.add('active');
         }
@@ -233,17 +221,17 @@ function createUI() {
     colorsDiv.appendChild(colorButtonsDiv);
     uiInfo.appendChild(colorsDiv);
     
-    // Add footer
     const footer = document.createElement('div');
     footer.className = 'footer';
     footer.textContent = '© 2025 clayable - rotate with mouse, pinch to zoom';
     document.body.appendChild(footer);
+    
+    setupPanelToggle();
 }
 
 function setMouseMode(mode) {
     mouseMode = mode;
     
-    // Update UI to reflect active tool
     const buttons = document.querySelectorAll('.tools button');
     buttons.forEach(button => {
         button.className = button.textContent.toLowerCase().includes(mouseMode) ? 'active' : '';
@@ -253,7 +241,6 @@ function setMouseMode(mode) {
 function setSpecialTool(toolId) {
     activeSpecialTool = toolId;
     
-    // Update UI to reflect active special tool
     const toolButtons = document.querySelectorAll('.tool-btn');
     toolButtons.forEach(button => {
         button.classList.remove('active');
@@ -262,7 +249,6 @@ function setSpecialTool(toolId) {
         }
     });
     
-    // If a special tool is selected, deactivate basic tools
     if (toolId) {
         const basicButtons = document.querySelectorAll('.tools button');
         basicButtons.forEach(button => {
@@ -272,7 +258,6 @@ function setSpecialTool(toolId) {
 }
 
 function onKeyDown(event) {
-    // Keyboard shortcuts for tools
     switch(event.key.toLowerCase()) {
         case 'a':
             setMouseMode('add');
@@ -290,12 +275,10 @@ function onKeyDown(event) {
 }
 
 function createClayParticles() {
-    // Remove any existing clay mesh
     if (clayMesh) {
         scene.remove(clayMesh);
     }
     
-    // Create a material for the clay particles
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
         metalness: 0.0,
@@ -308,22 +291,18 @@ function createClayParticles() {
         opacity: 0.9,
     });
     
-    // Initialize particles array with defaults
     particles = [];
     particleCount = 0;
     
-    // Create parent group for clay mesh
     clayMesh = new THREE.Group();
     scene.add(clayMesh);
     
-    // Add initial clay shape
     resetClay();
 }
 
 function addParticle(x, y, z, size) {
     if (particleCount >= maxParticles) return;
     
-    // Create a sphere for this particle
     const geometry = new THREE.SphereGeometry(size, 8, 8);
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
@@ -340,7 +319,6 @@ function addParticle(x, y, z, size) {
     const particle = new THREE.Mesh(geometry, material);
     particle.position.set(x, y, z);
     
-    // Store particle data
     particles.push({
         mesh: particle,
         size: size,
@@ -354,41 +332,33 @@ function addParticle(x, y, z, size) {
 function removeParticle(index) {
     if (index < 0 || index >= particleCount) return;
     
-    // Remove the particle mesh
     clayMesh.remove(particles[index].mesh);
     
-    // Remove from the array
     particles.splice(index, 1);
     particleCount--;
 }
 
 function resetClay() {
-    // Clear all existing particles
     while (particles.length > 0) {
         removeParticle(0);
     }
     
-    // Create a spherical arrangement of particles
     const numParticles = 50;
     const radius = 20;
     
     for (let i = 0; i < numParticles; i++) {
-        // Create a somewhat uniform distribution on a sphere
         const phi = Math.acos(-1 + (2 * i) / numParticles);
         const theta = Math.sqrt(numParticles * Math.PI) * phi;
         
-        // Add some randomness for organic feel
         const x = radius * Math.cos(theta) * Math.sin(phi) + (Math.random() - 0.5) * 5;
         const y = radius * Math.sin(theta) * Math.sin(phi) + (Math.random() - 0.5) * 5;
         const z = radius * Math.cos(phi) + (Math.random() - 0.5) * 5;
         
-        // Random sizes for organic feel
         const size = 5 + Math.random() * 5;
         
         addParticle(x, y, z, size);
     }
     
-    // Add a few more random particles inside for solidity
     for (let i = 0; i < 20; i++) {
         const r = radius * 0.7;
         const size = 4 + Math.random() * 4;
@@ -411,11 +381,9 @@ function onWindowResize() {
 }
 
 function onMouseMove(event) {
-    // Calculate normalized mouse position (-1 to 1)
     mousePosition.x = (event.clientX / window.innerWidth) * 2 - 1;
     mousePosition.y = -(event.clientY / window.innerHeight) * 2 + 1;
     
-    // Interact with clay if mouse is down
     if (isMouseDown) {
         interactWithClay();
     }
@@ -426,18 +394,15 @@ function onMouseMove(event) {
 function onTouchMove(event) {
     event.preventDefault();
     
-    // Calculate normalized touch position (-1 to 1)
     mousePosition.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
     mousePosition.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
     
-    // Always interact with clay on touch devices
     interactWithClay();
     
     lastMousePosition.copy(mousePosition);
 }
 
 function interactWithClay() {
-    // Get 3D position from mouse position using raycasting
     const vector = new THREE.Vector3(mousePosition.x, mousePosition.y, 0.5);
     vector.unproject(camera);
     
@@ -445,7 +410,6 @@ function interactWithClay() {
     const distance = -camera.position.z / dir.z;
     const pos = camera.position.clone().add(dir.multiplyScalar(distance));
     
-    // Handle specialized tools if one is active
     if (activeSpecialTool) {
         switch (activeSpecialTool) {
             case 'stamp-sphere':
@@ -464,17 +428,14 @@ function interactWithClay() {
                 applyFlattenTool(pos, toolSize, specializedTools['tool-flatten'].strength);
                 break;
         }
-        return; // Skip basic tool handling if using specialized tools
+        return;
     }
     
-    // Handle basic tools
     switch (mouseMode) {
         case 'add':
-            // Add clay particles
             const size = 5 + Math.random() * 5;
             addParticle(pos.x, pos.y, pos.z, size);
             
-            // Smooth movements by adding intermediate points for 'add' mode
             if (lastMousePosition.distanceTo(mousePosition) > 0.01) {
                 const steps = 3;
                 const deltaX = (mousePosition.x - lastMousePosition.x) / steps;
@@ -498,19 +459,17 @@ function interactWithClay() {
             break;
             
         case 'remove':
-            // Find and remove the closest particle(s)
             removeNearbyParticles(pos, 15);
             break;
             
         case 'smooth':
-            // Move particles slightly towards the average position
             smoothNearbyParticles(pos, 30);
             break;
     }
 }
 
 function removeNearbyParticles(position, radius) {
-    const tempParticles = [...particles]; // Create a copy to avoid issues during removal
+    const tempParticles = [...particles];
     
     for (let i = tempParticles.length - 1; i >= 0; i--) {
         const particle = tempParticles[i];
@@ -523,7 +482,6 @@ function removeNearbyParticles(position, radius) {
 }
 
 function smoothNearbyParticles(position, radius) {
-    // Find particles within radius
     const nearbyParticles = [];
     
     for (let i = 0; i < particleCount; i++) {
@@ -535,17 +493,14 @@ function smoothNearbyParticles(position, radius) {
         }
     }
     
-    // Nothing to smooth
     if (nearbyParticles.length < 2) return;
     
-    // Calculate average position
     const avgPos = new THREE.Vector3(0, 0, 0);
     for (const particle of nearbyParticles) {
         avgPos.add(particle.position);
     }
     avgPos.divideScalar(nearbyParticles.length);
     
-    // Move particles slightly towards the average position
     for (const particle of nearbyParticles) {
         const toAvg = new THREE.Vector3().subVectors(avgPos, particle.position);
         particle.position.add(toAvg.multiplyScalar(0.1));
@@ -554,10 +509,8 @@ function smoothNearbyParticles(position, radius) {
 }
 
 function setClayColor(name, colorValue) {
-    // Update the current clay color
     clayColor = colorValue;
     
-    // Update UI to reflect active color
     const colorButtons = document.querySelectorAll('.color-btn');
     colorButtons.forEach(button => {
         button.classList.remove('active');
@@ -566,7 +519,6 @@ function setClayColor(name, colorValue) {
         }
     });
     
-    // Update existing particles' colors
     for (const particle of particles) {
         particle.mesh.material.color.setHex(colorValue);
     }
@@ -575,76 +527,60 @@ function setClayColor(name, colorValue) {
 function animate() {
     requestAnimationFrame(animate);
     
-    // Update controls
     controls.update();
     
-    // Add some subtle ambient motion to the clay
     addAmbientMotion();
     
-    // Render the scene
     renderer.render(scene, camera);
 }
 
 function addAmbientMotion() {
-    // Only update every few frames to improve performance
     if (Math.floor(clock.getElapsedTime() * 10) % 10 !== 0) return;
     
-    // Add a very subtle random motion to random particles
     const time = Date.now() * 0.001;
-    const intensity = 0.2; // Subtle motion
+    const intensity = 0.2;
     
-    // Move a few random particles
     for (let i = 0; i < 3; i++) {
         if (particleCount <= 0) continue;
         
         const index = Math.floor(Math.random() * particleCount);
         const particle = particles[index];
         
-        // Apply a small random movement
         particle.position.x += (Math.random() - 0.5) * intensity;
         particle.position.y += (Math.random() - 0.5) * intensity;
         particle.position.z += (Math.random() - 0.5) * intensity;
         
-        // Update the mesh position
         particle.mesh.position.copy(particle.position);
     }
 }
 
-// Apply a sphere stamp to add multiple particles in a spherical shape
 function applyStampSphere(position, size) {
     const radius = size;
     const numParticles = Math.floor(size * 1.5);
     
-    // Add a center particle
     addParticle(position.x, position.y, position.z, size / 3);
     
-    // Add particles in a spherical distribution
     for (let i = 0; i < numParticles; i++) {
-        // Create points around a sphere with random distribution
         const phi = Math.random() * Math.PI * 2;
         const theta = Math.random() * Math.PI;
         
-        // Calculate position on sphere
         const r = radius * 0.7 * Math.random();
         const x = position.x + r * Math.cos(phi) * Math.sin(theta);
         const y = position.y + r * Math.sin(phi) * Math.sin(theta);
         const z = position.z + r * Math.cos(theta);
         
-        // Random sizes for organic feel
         const particleSize = (2 + Math.random() * 3) * (size / 15);
         
         addParticle(x, y, z, particleSize);
     }
 }
 
-// Apply a cube stamp to add multiple particles in a cubic shape
 function applyStampCube(position, size) {
     const side = size * 0.8;
     const halfSide = side / 2;
     const numPerSide = 3;
     const step = side / numPerSide;
     
-    // Create particles in a grid pattern
     for (let x = 0; x < numPerSide; x++) {
         for (let y = 0; y < numPerSide; y++) {
             for (let z = 0; z < numPerSide; z++) {
@@ -652,10 +588,8 @@ function applyStampCube(position, size) {
                 const py = position.y + (y * step) - halfSide + (Math.random() - 0.5) * step * 0.5;
                 const pz = position.z + (z * step) - halfSide + (Math.random() - 0.5) * step * 0.5;
                 
-                // Skip some particles for a less perfect cube
                 if (Math.random() > 0.8) continue;
                 
-                // Random sizes for organic feel
                 const particleSize = (2 + Math.random() * 2) * (size / 15);
                 
                 addParticle(px, py, pz, particleSize);
@@ -664,14 +598,12 @@ function applyStampCube(position, size) {
     }
 }
 
-// Create a spiral pattern of particles
 function applyPatternSpiral(position, size) {
     const radius = size * 0.7;
     const numParticles = Math.max(8, Math.floor(size * 0.7));
-    const turns = 2; // Number of complete turns in spiral
+    const turns = 2;
     
     for (let i = 0; i < numParticles; i++) {
-        // Calculate position on spiral
         const angle = (i / numParticles) * Math.PI * 2 * turns;
         const spiralRadius = (i / numParticles) * radius;
         
@@ -679,36 +611,30 @@ function applyPatternSpiral(position, size) {
         const y = position.y + spiralRadius * Math.sin(angle);
         const z = position.z + (i / numParticles - 0.5) * (radius * 0.5);
         
-        // Gradually decreasing size for spiral effect
         const particleSize = (5 - (i / numParticles) * 3) * (size / 20);
         
         addParticle(x, y, z, particleSize);
     }
 }
 
-// Create a ring pattern of particles
 function applyPatternRing(position, size) {
     const radius = size * 0.7;
     const numParticles = Math.max(8, Math.floor(size * 0.5));
     
     for (let i = 0; i < numParticles; i++) {
-        // Calculate position on ring
         const angle = (i / numParticles) * Math.PI * 2;
         
         const x = position.x + radius * Math.cos(angle);
         const y = position.y + radius * Math.sin(angle);
-        const z = position.z + (Math.random() - 0.5) * 2; // Slight z-variation
+        const z = position.z + (Math.random() - 0.5) * 2;
         
-        // Consistent size for ring particles
         const particleSize = 3 * (size / 20);
         
         addParticle(x, y, z, particleSize);
     }
 }
 
-// Flatten nearby particles along a plane
 function applyFlattenTool(position, size, strength) {
-    // Find particles within radius
     const radius = size;
     const nearbyParticles = [];
     
@@ -723,28 +649,51 @@ function applyFlattenTool(position, size, strength) {
     
     if (nearbyParticles.length < 1) return;
     
-    // Calculate average position for the center of flattening
     const avgPos = new THREE.Vector3(0, 0, 0);
     for (const particle of nearbyParticles) {
         avgPos.add(particle.position);
     }
     avgPos.divideScalar(nearbyParticles.length);
     
-    // Find surface normal (use camera direction as approximation)
     const normal = position.clone().sub(camera.position).normalize();
     
-    // Move particles to flatten along the plane
     for (const particle of nearbyParticles) {
-        // Project vector from avg position to particle onto normal
         const toParticle = particle.position.clone().sub(avgPos);
         const dot = toParticle.dot(normal);
         const projection = normal.clone().multiplyScalar(dot);
         
-        // Calculate flattening movement
         const flatten = projection.multiplyScalar(strength * 0.3);
         
-        // Apply flattening
         particle.position.sub(flatten);
         particle.mesh.position.copy(particle.position);
     }
+}
+
+function setupPanelToggle() {
+    const panelToggle = document.getElementById('panel-toggle');
+    const uiContainer = document.getElementById('ui-container');
+    const iconElement = panelToggle.querySelector('i');
+    
+    if (uiContainer.classList.contains('hidden')) {
+        iconElement.className = 'fas fa-sliders-h';
+    } else {
+        iconElement.className = 'fas fa-times';
+    }
+    
+    panelToggle.addEventListener('click', () => {
+        uiContainer.classList.toggle('hidden');
+        
+        if (uiContainer.classList.contains('hidden')) {
+            iconElement.className = 'fas fa-sliders-h';
+        } else {
+            iconElement.className = 'fas fa-times';
+        }
+    });
+    
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            panelToggle.click();
+        }
+    });
 }
