@@ -1,8 +1,9 @@
 body {
     margin: 0;
     overflow: hidden;
-    font-family: Arial, sans-serif;
-    background-color: #111;
+    font-family: 'Poppins', sans-serif;
+    background-color: #0d1117;
+    color: #e6edf3;
 }
 
 #container {
@@ -15,54 +16,267 @@ body {
 
 #info {
     position: absolute;
-    top: 10px;
-    width: 100%;
-    text-align: center;
-    color: white;
+    top: 20px;
+    left: 20px;
+    text-align: left;
     z-index: 100;
     pointer-events: none;
 }
 
-#info h1, #info p {
+#info h1 {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 600;
+    background: linear-gradient(45deg, #e8c291, #ffd700);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+}
+
+#info p {
+    margin: 5px 0 0 0;
+    font-size: 16px;
+    font-weight: 300;
+    opacity: 0.8;
+    letter-spacing: 0.5px;
+}
+
+#ui-container {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     pointer-events: none;
-}
-
-h1 {
-    font-size: 24px;
-    margin-bottom: 5px;
-    text-shadow: 0 0 5px rgba(0,0,0,0.5);
-}
-
-p {
-    font-size: 14px;
-    opacity: 0.7;
+    backdrop-filter: blur(5px);
+    padding: 15px;
+    border-radius: 16px;
+    background-color: rgba(13, 17, 23, 0.35);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Clay tool buttons */
 .tools {
-    margin-top: 15px;
+    margin-bottom: 15px;
     display: flex;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     pointer-events: auto;
 }
 
 .tools button {
-    background-color: rgba(50, 50, 50, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 4px;
+    background-color: rgba(22, 27, 34, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e6edf3;
+    padding: 10px 15px;
+    border-radius: 8px;
     cursor: pointer;
+    font-family: 'Poppins', sans-serif;
     font-size: 14px;
+    font-weight: 500;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .tools button:hover {
-    background-color: rgba(80, 80, 80, 0.8);
+    background-color: rgba(48, 54, 61, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .tools button.active {
-    background-color: rgba(228, 194, 145, 0.6); /* Clay color */
-    box-shadow: 0 0 10px rgba(228, 194, 145, 0.4);
+    background: linear-gradient(45deg, rgba(232, 194, 145, 0.2), rgba(255, 215, 0, 0.2));
+    box-shadow: 0 0 12px rgba(232, 194, 145, 0.5);
+    border: 1px solid rgba(232, 194, 145, 0.4);
+}
+
+/* Specialized tools styles */
+.special-tools {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+    width: 100%;
+    max-width: 700px;
+}
+
+.tools-label {
+    font-size: 15px;
+    color: #e6edf3;
+    margin-bottom: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.tool-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.tool-btn {
+    background-color: rgba(22, 27, 34, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e6edf3;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.tool-btn:hover {
+    background-color: rgba(48, 54, 61, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tool-btn.active {
+    background: linear-gradient(45deg, rgba(100, 180, 255, 0.2), rgba(70, 160, 255, 0.2));
+    box-shadow: 0 0 12px rgba(100, 180, 255, 0.5);
+    border: 1px solid rgba(100, 180, 255, 0.4);
+}
+
+/* Size slider styles */
+.size-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+    color: #e6edf3;
+    font-size: 14px;
+    background-color: rgba(22, 27, 34, 0.5);
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.size-control label {
+    font-weight: 500;
+}
+
+.size-control input[type="range"] {
+    -webkit-appearance: none;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    width: 180px;
+}
+
+.size-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #e8c291, #ffd700);
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.size-control input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.1);
+}
+
+.size-control #size-value {
+    min-width: 25px;
+    text-align: center;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* Color selection styles */
+.colors {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+    width: 100%;
+}
+
+.color-label {
+    font-size: 15px;
+    color: #e6edf3;
+    margin-bottom: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.color-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    max-width: 350px;
+}
+
+.color-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-btn:hover {
+    transform: scale(1.1) translateY(-3px);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+}
+
+.color-btn.active {
+    border: 3px solid white;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+}
+
+/* Footer credit */
+.footer {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 12px;
+    opacity: 0.6;
+    pointer-events: none;
+    font-weight: 300;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #ui-container {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        padding: 10px;
+    }
+    
+    .tools button, .tool-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    
+    .size-control {
+        padding: 6px 10px;
+    }
+    
+    .color-btn {
+        width: 30px;
+        height: 30px;
+    }
 }
