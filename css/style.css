@@ -306,6 +306,21 @@ body {
     text-align: center;
 }
 
+/* Footer styles */
+footer {
+    position: absolute;
+    bottom: 10px;
+    left: 20px;
+    font-size: 14px;
+    opacity: 0.7;
+    z-index: 100;
+}
+
+footer p {
+    margin: 0;
+    color: #e6edf3;
+}
+
 @media (max-width: 768px) {
     #ui-container {
         width: 280px;

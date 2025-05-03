@@ -6,6 +6,12 @@ let isMouseDown = false;
 let lastMousePosition = new THREE.Vector2();
 let clock = new THREE.Clock();
 
+// Enhanced 3D settings
+let turntable = false;
+let rotationSpeed = 0.001;
+let fogEnabled = true;
+let shadowsEnabled = true;
+let cameraFollowsCursor = true;
 let clayColor = 0xe8c291;
 const clayColors = {
     'Classic Clay': 0xe8c291,
@@ -16,6 +22,16 @@ const clayColors = {
     'Gray Clay': 0x808080
 };
 let mouseMode = 'add';
+
+let isDrawing = false;
+let currentDrawingLine = null;
+let drawingPoints = [];
+let drawingLines = [];
+let lineThickness = 3;
+let drawingCurve = null;
+let controlsEnabledBeforeDrawing = true; 
+let cameraFixedPosition = null;
+let cameraFixedQuaternion = null;
 
 const specializedTools = {
     'stamp-sphere': { name: 'Sphere Stamp', size: 15, shape: 'sphere' },
@@ -33,6 +49,15 @@ let particles = [];
 let clayMesh;
 
 let uiInfo;
+// Add raycaster for 3D drawing
+let raycaster = new THREE.Raycaster();
+
+
+let useMetaballs = true;
+let metaballMesh = null;
+let metaballMaterial = null;
+let particleInfluence = 1.3; 
+let claySmoothing = 0.85;  
 
 init();
 animate();
@@ -41,29 +66,72 @@ function init() {
     container = document.getElementById('container');
     
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
+    scene.background = new THREE.Color(0x222222);
+    
+    
+    if (fogEnabled) {
+        scene.fog = new THREE.FogExp2(0x222222, 0.0008);
+    }
     
     const width = window.innerWidth;
     const height = window.innerHeight;
     camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
     camera.position.set(0, 0, 500);
     
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+    // Improved lighting setup - brighter lights
+    const ambientLight = new THREE.AmbientLight(0x808080, 1.0);  // Brighter ambient light
     scene.add(ambientLight);
     
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    // Main directional light with shadows - brighter
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(1, 1, 1).normalize();
+    directionalLight.castShadow = shadowsEnabled;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 10;
+    directionalLight.shadow.camera.far = 1000;
+    directionalLight.shadow.camera.left = -300;
+    directionalLight.shadow.camera.right = 300;
+    directionalLight.shadow.camera.top = 300;
+    directionalLight.shadow.camera.bottom = -300;
+    directionalLight.shadow.bias = -0.001;
     scene.add(directionalLight);
     
-    const bottomLight = new THREE.DirectionalLight(0xffc0cb, 0.3);
+    // Bottom light for fill - brighter
+    const bottomLight = new THREE.DirectionalLight(0xffc0cb, 0.5);
     bottomLight.position.set(0, -1, 0).normalize();
     scene.add(bottomLight);
     
+    // Add rim light for 3D effect - brighter
+    const rimLight = new THREE.DirectionalLight(0x6aabff, 0.7);
+    rimLight.position.set(-1, 0, -1).normalize();
+    scene.add(rimLight);
+    
+    // Add frontal light to better illuminate the clay
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    frontLight.position.set(0, 0, 1).normalize();
+    scene.add(frontLight);
+    
+    // Add point light for local highlights - brighter
+    const pointLight = new THREE.PointLight(0xffffff, 0.7, 300);
+    pointLight.position.set(50, 50, 50);
+    pointLight.castShadow = shadowsEnabled;
+    scene.add(pointLight);
+    
     createClayParticles();
     
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Improved renderer with shadows
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: true,
+        powerPreference: "high-performance"
+    });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(width, height);
+    renderer.shadowMap.enabled = shadowsEnabled;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.physicallyCorrectLights = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;  // Increased exposure
     container.appendChild(renderer.domElement);
     
     controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -71,19 +139,40 @@ function init() {
     controls.dampingFactor = 0.05;
     controls.rotateSpeed = 0.5;
     
+    // Add a ground plane for shadows to fall on
+    if (shadowsEnabled) {
+        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+        const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = -100;
+        groundPlane.receiveShadow = true;
+        scene.add(groundPlane);
+    }
+    
     createUI();
     
     window.addEventListener('resize', onWindowResize);
     
     container.addEventListener('mousemove', onMouseMove);
-    container.addEventListener('mousedown', () => { isMouseDown = true; });
-    container.addEventListener('mouseup', () => { isMouseDown = false; });
+    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('dblclick', onDoubleClick); // Add double-click handler
     
     container.addEventListener('touchmove', onTouchMove);
-    container.addEventListener('touchstart', () => { isMouseDown = true; });
-    container.addEventListener('touchend', () => { isMouseDown = false; });
+    container.addEventListener('touchstart', () => { 
+        isMouseDown = true;
+        if (mouseMode === 'draw') startDrawing();
+    });
+    container.addEventListener('touchend', () => { 
+        isMouseDown = false;
+        if (mouseMode === 'draw') endDrawing();
+    });
     
     window.addEventListener('keydown', onKeyDown);
+    
+    // Create environment map for reflections
+    createEnvironmentMap();
 }
 
 function createUI() {
@@ -119,6 +208,14 @@ function createUI() {
         setSpecialTool(null);
     };
     
+    // Add new draw button
+    const drawButton = document.createElement('button');
+    drawButton.textContent = 'Draw 3D (F)';
+    drawButton.onclick = () => {
+        setMouseMode('draw');
+        setSpecialTool(null);
+    };
+    
     const resetButton = document.createElement('button');
     resetButton.textContent = 'Reset Clay (R)';
     resetButton.onclick = resetClay;
@@ -126,9 +223,46 @@ function createUI() {
     toolsDiv.appendChild(addButton);
     toolsDiv.appendChild(removeButton);
     toolsDiv.appendChild(smoothButton);
+    toolsDiv.appendChild(drawButton);
     toolsDiv.appendChild(resetButton);
     
     uiInfo.appendChild(toolsDiv);
+    
+    // Add line thickness control
+    const lineThicknessDiv = document.createElement('div');
+    lineThicknessDiv.className = 'size-control';
+    lineThicknessDiv.style.display = 'none';
+    lineThicknessDiv.id = 'line-thickness-control';
+    
+    const thicknessLabel = document.createElement('label');
+    thicknessLabel.textContent = 'Line Thickness';
+    thicknessLabel.htmlFor = 'line-thickness';
+    
+    const thicknessContainer = document.createElement('div');
+    thicknessContainer.className = 'slider-container';
+    
+    const thicknessSlider = document.createElement('input');
+    thicknessSlider.type = 'range';
+    thicknessSlider.min = '1';
+    thicknessSlider.max = '10';
+    thicknessSlider.value = lineThickness;
+    thicknessSlider.id = 'line-thickness';
+    thicknessSlider.oninput = () => {
+        lineThickness = parseInt(thicknessSlider.value);
+        thicknessValue.textContent = lineThickness;
+    };
+    
+    const thicknessValue = document.createElement('span');
+    thicknessValue.textContent = lineThickness;
+    thicknessValue.id = 'thickness-value';
+    
+    thicknessContainer.appendChild(thicknessSlider);
+    thicknessContainer.appendChild(thicknessValue);
+    
+    lineThicknessDiv.appendChild(thicknessLabel);
+    lineThicknessDiv.appendChild(thicknessContainer);
+    
+    uiInfo.appendChild(lineThicknessDiv);
     
     const divider1 = document.createElement('div');
     divider1.className = 'section-divider';
@@ -236,6 +370,12 @@ function setMouseMode(mode) {
     buttons.forEach(button => {
         button.className = button.textContent.toLowerCase().includes(mouseMode) ? 'active' : '';
     });
+    
+    // Show/hide line thickness control based on draw mode
+    const lineThicknessControl = document.getElementById('line-thickness-control');
+    if (lineThicknessControl) {
+        lineThicknessControl.style.display = mode === 'draw' ? 'block' : 'none';
+    }
 }
 
 function setSpecialTool(toolId) {
@@ -268,6 +408,9 @@ function onKeyDown(event) {
         case 'd':
             setMouseMode('smooth');
             break;
+        case 'f':
+            setMouseMode('draw');
+            break;
         case 'r':
             resetClay();
             break;
@@ -279,23 +422,86 @@ function createClayParticles() {
         scene.remove(clayMesh);
     }
     
+    // Create container for individual particles
+    clayMesh = new THREE.Group();
+    scene.add(clayMesh);
+    
+    // Create shared material for all clay particles
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
-        metalness: 0.0,
-        roughness: 0.7,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.4,
-        reflectivity: 0.1,
-        envMapIntensity: 0.3,
-        transparent: true,
-        opacity: 0.9,
+        metalness: 0.1,
+        roughness: 0.5,
+        clearcoat: 0.4,
+        clearcoatRoughness: 0.3,
+        reflectivity: 0.2,
+        envMapIntensity: 0.4,
     });
+    
+    // For metaball effect
+    if (useMetaballs) {
+        // Create metaball material with custom shader
+        metaballMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uColor: { value: new THREE.Color(clayColor) },
+                uTime: { value: 0 },
+                uClaySmoothing: { value: claySmoothing },
+                uMetalness: { value: 0.1 },
+                uRoughness: { value: 0.5 },
+                uClearcoat: { value: 0.4 }
+            },
+            vertexShader: `
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+                varying vec2 vUv;
+                
+                void main() {
+                    vPosition = position;
+                    vNormal = normal;
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uColor;
+                uniform float uTime;
+                uniform float uClaySmoothing;
+                uniform float uMetalness;
+                uniform float uRoughness;
+                uniform float uClearcoat;
+                
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+                varying vec2 vUv;
+                
+                void main() {
+                    // Base clay color with slight variation for texture
+                    vec3 clayColor = uColor * (0.95 + 0.1 * sin(vPosition.x * 10.0 + vPosition.y * 15.0 + vPosition.z * 5.0));
+                    
+                    // Calculate rim lighting
+                    vec3 viewDirection = normalize(-vPosition);
+                    float rimFactor = 1.0 - max(0.0, dot(viewDirection, vNormal));
+                    rimFactor = pow(rimFactor, 3.0) * 0.5;
+                    
+                    // Subtle surface variation
+                    float variation = 0.08 * sin(vPosition.x * 2.0 + vPosition.y * 3.0 + vPosition.z * 1.5 + uTime);
+                    
+                    // Simple lighting model
+                    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+                    float diffuse = max(0.0, dot(vNormal, lightDir)) * 0.7 + 0.3;
+                    
+                    // Combine all factors
+                    vec3 finalColor = clayColor * diffuse + vec3(1.0, 0.9, 0.8) * rimFactor;
+                    finalColor += variation;
+                    
+                    gl_FragColor = vec4(finalColor, 1.0);
+                }
+            `,
+            transparent: false
+        });
+    }
     
     particles = [];
     particleCount = 0;
-    
-    clayMesh = new THREE.Group();
-    scene.add(clayMesh);
     
     resetClay();
 }
@@ -303,30 +509,47 @@ function createClayParticles() {
 function addParticle(x, y, z, size) {
     if (particleCount >= maxParticles) return;
     
-    const geometry = new THREE.SphereGeometry(size, 8, 8);
+    // Use higher quality geometry for better 3D appearance
+    const geometry = new THREE.SphereGeometry(size, 12, 10);
+    
+    // Enhanced material with better visibility
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
-        metalness: 0.0,
-        roughness: 0.7,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.4,
-        reflectivity: 0.1,
-        envMapIntensity: 0.3,
-        transparent: true,
-        opacity: 0.9,
+        metalness: 0.1,
+        roughness: 0.5,     // Less roughness for more sheen
+        clearcoat: 0.6,     // More clearcoat for better highlights
+        clearcoatRoughness: 0.2,
+        reflectivity: 0.3,  // More reflectivity
+        envMapIntensity: 0.6,
+        transparent: false, // No transparency for better visibility
+        emissive: new THREE.Color(clayColor).multiplyScalar(0.05) // Subtle glow
     });
     
     const particle = new THREE.Mesh(geometry, material);
     particle.position.set(x, y, z);
     
+    // Make particles larger to create overlapping effect that looks more clay-like
+    particle.scale.set(particleInfluence, particleInfluence, particleInfluence);
+    
+    // Enable shadows for particles
+    particle.castShadow = true;
+    particle.receiveShadow = true;
+    
     particles.push({
         mesh: particle,
         size: size,
-        position: new THREE.Vector3(x, y, z)
+        position: new THREE.Vector3(x, y, z),
+        originalPosition: new THREE.Vector3(x, y, z),
+        phase: Math.random() * Math.PI * 2 // Random starting phase for animation
     });
     
     clayMesh.add(particle);
     particleCount++;
+    
+    // After adding particles, update nearby particles to create connection effect
+    if (useMetaballs && particleCount > 1) {
+        createConnectionsNearParticle(particles[particleCount - 1]);
+    }
 }
 
 function removeParticle(index) {
@@ -339,10 +562,31 @@ function removeParticle(index) {
 }
 
 function resetClay() {
+    // Clear all clay particles
     while (particles.length > 0) {
         removeParticle(0);
     }
     
+    // Clear all 3D drawing lines
+    for (let i = 0; i < drawingLines.length; i++) {
+        scene.remove(drawingLines[i]);
+        if (drawingLines[i].geometry) {
+            drawingLines[i].geometry.dispose();
+        }
+        if (drawingLines[i].material) {
+            drawingLines[i].material.dispose();
+        }
+    }
+    drawingLines = [];
+    
+    // Reset any current drawing
+    if (currentDrawingLine) {
+        scene.remove(currentDrawingLine);
+        currentDrawingLine.geometry.dispose();
+        currentDrawingLine = null;
+    }
+    
+    // Add new clay particles in default formation
     const numParticles = 50;
     const radius = 20;
     
@@ -391,6 +635,23 @@ function onMouseMove(event) {
     lastMousePosition.copy(mousePosition);
 }
 
+// Add new mousedown and mouseup event handlers for drawing
+function onMouseDown(event) {
+    isMouseDown = true;
+    
+    if (mouseMode === 'draw') {
+        startDrawing();
+    }
+}
+
+function onMouseUp(event) {
+    isMouseDown = false;
+    
+    if (mouseMode === 'draw') {
+        endDrawing();
+    }
+}
+
 function onTouchMove(event) {
     event.preventDefault();
     
@@ -409,6 +670,18 @@ function interactWithClay() {
     const dir = vector.sub(camera.position).normalize();
     const distance = -camera.position.z / dir.z;
     const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+    
+    if (mouseMode === 'draw') {
+        if (isDrawing) {
+            
+            if (cameraFixedPosition && cameraFixedQuaternion) {
+                camera.position.copy(cameraFixedPosition);
+                camera.quaternion.copy(cameraFixedQuaternion);
+            }
+            updateDrawing(pos);
+        }
+        return;
+    }
     
     if (activeSpecialTool) {
         switch (activeSpecialTool) {
@@ -527,30 +800,55 @@ function setClayColor(name, colorValue) {
 function animate() {
     requestAnimationFrame(animate);
     
-    controls.update();
+    // Only update controls if not in drawing mode
+    if (!isDrawing) {
+        controls.update();
+    } else if (cameraFixedPosition && cameraFixedQuaternion) {
+        // Force camera to stay at the fixed position while drawing
+        camera.position.copy(cameraFixedPosition);
+        camera.quaternion.copy(cameraFixedQuaternion);
+    }
     
-    addAmbientMotion();
+    // Enhanced 3D animation
+    const time = clock.getElapsedTime();
+    
+    // Subtle breathing animation for clay particles
+    animateClayParticles(time);
+    
+    // Optional turntable rotation for showcasing the model
+    if (turntable) {
+        clayMesh.rotation.y += rotationSpeed;
+    }
     
     renderer.render(scene, camera);
 }
 
-function addAmbientMotion() {
-    if (Math.floor(clock.getElapsedTime() * 10) % 10 !== 0) return;
-    
-    const time = Date.now() * 0.001;
-    const intensity = 0.2;
-    
-    for (let i = 0; i < 3; i++) {
-        if (particleCount <= 0) continue;
+function animateClayParticles(time) {
+    // Apply subtle movement to particles to enhance 3D look
+    for (let i = 0; i < particles.length; i++) {
+        const particle = particles[i];
         
-        const index = Math.floor(Math.random() * particleCount);
-        const particle = particles[index];
-        
-        particle.position.x += (Math.random() - 0.5) * intensity;
-        particle.position.y += (Math.random() - 0.5) * intensity;
-        particle.position.z += (Math.random() - 0.5) * intensity;
-        
-        particle.mesh.position.copy(particle.position);
+        // Only apply subtle movement to some particles
+        if (i % 3 === 0) {
+            // Get original position
+            const origPos = particle.originalPosition;
+            
+            // Apply sine wave movement with unique phase for each particle
+            const pulseAmplitude = particle.size * 0.03;
+            const pulseSpeed = 1.5;
+            
+            const xOffset = Math.sin(time * pulseSpeed + particle.phase) * pulseAmplitude;
+            const yOffset = Math.cos(time * pulseSpeed + particle.phase * 2) * pulseAmplitude;
+            const zOffset = Math.sin(time * pulseSpeed * 0.7 + particle.phase * 3) * pulseAmplitude;
+            
+            // Apply offset to position
+            particle.position.x = origPos.x + xOffset;
+            particle.position.y = origPos.y + yOffset;
+            particle.position.z = origPos.z + zOffset;
+            
+            // Update mesh position
+            particle.mesh.position.copy(particle.position);
+        }
     }
 }
 
@@ -696,4 +994,237 @@ function setupPanelToggle() {
             panelToggle.click();
         }
     });
+}
+
+// Add new drawing functions
+function startDrawing() {
+    isDrawing = true;
+    drawingPoints = [];
+    
+    // Disable camera controls while drawing
+    controlsEnabledBeforeDrawing = controls.enabled;
+    controls.enabled = false;
+    
+    // Store camera position to keep it fixed during drawing
+    cameraFixedPosition = camera.position.clone();
+    cameraFixedQuaternion = camera.quaternion.clone();
+    
+    const vector = new THREE.Vector3(mousePosition.x, mousePosition.y, 0.5);
+    vector.unproject(camera);
+    
+    const dir = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z;
+    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+    
+    drawingPoints.push(pos.clone());
+    
+    // Create simple line as a placeholder while drawing
+    const material = new THREE.LineBasicMaterial({
+        color: clayColor,
+        linewidth: 1
+    });
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(drawingPoints);
+    currentDrawingLine = new THREE.Line(geometry, material);
+    scene.add(currentDrawingLine);
+}
+
+function updateDrawing(position) {
+    if (!isDrawing || !currentDrawingLine) return;
+    
+    drawingPoints.push(position.clone());
+    
+    // Update the line geometry
+    currentDrawingLine.geometry.dispose();
+    currentDrawingLine.geometry = new THREE.BufferGeometry().setFromPoints(drawingPoints);
+}
+
+function endDrawing() {
+    if (!isDrawing || !currentDrawingLine) return;
+    
+    isDrawing = false;
+    
+    // Restore camera controls to previous state
+    controls.enabled = controlsEnabledBeforeDrawing;
+    
+    // Remove the temporary line
+    scene.remove(currentDrawingLine);
+    currentDrawingLine.geometry.dispose();
+    
+    // Only create a tube if we have enough points
+    if (drawingPoints.length >= 2) {
+        // Create a smooth curve from the points
+        drawingCurve = new THREE.CatmullRomCurve3(drawingPoints);
+        
+        // Create a tube geometry with proper thickness
+        const tubeGeometry = new THREE.TubeGeometry(
+            drawingCurve,
+            Math.min(64, drawingPoints.length * 3), // Segments - more segments = smoother curve
+            lineThickness * 0.8,                    // Radius - visual thickness of the tube
+            8,                                      // RadialSegments - roundness of the tube
+            false                                   // Closed - whether to connect ends
+        );
+        
+        // Create material for the tube
+        const tubeMaterial = new THREE.MeshPhysicalMaterial({
+            color: clayColor,
+            metalness: 0.0,
+            roughness: 0.7,
+            clearcoat: 0.2,
+            clearcoatRoughness: 0.4,
+            reflectivity: 0.1,
+            envMapIntensity: 0.3,
+            transparent: true,
+            opacity: 0.9,
+        });
+        
+        // Create the tube mesh
+        const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
+        scene.add(tubeMesh);
+        
+        // Add to drawing lines array
+        drawingLines.push(tubeMesh);
+        
+        // Add clay particles along the tube
+        addParticlesAlongTube(drawingCurve, lineThickness);
+    }
+    
+    // Reset current drawing line
+    currentDrawingLine = null;
+}
+
+function addParticlesAlongTube(curve, thickness) {
+    // Number of particles depends on curve length and thickness
+    const numPoints = Math.max(10, Math.floor(drawingPoints.length * 2));
+    
+    // Calculate points along the curve
+    for (let i = 0; i < numPoints; i++) {
+        const t = i / (numPoints - 1);
+        const point = curve.getPoint(t);
+        
+        // Add variation to make it look more natural
+        const jitter = thickness * 0.2;
+        const jx = point.x + (Math.random() - 0.5) * jitter;
+        const jy = point.y + (Math.random() - 0.5) * jitter;
+        const jz = point.z + (Math.random() - 0.5) * jitter;
+        
+        // Particle size based on thickness
+        const size = thickness * 0.5 + Math.random() * thickness * 0.3;
+        
+        addParticle(jx, jy, jz, size);
+    }
+}
+
+function createEnvironmentMap() {
+    // Create a cubemap for environment reflections
+    const path = 'https://threejs.org/examples/textures/cube/';
+    const format = '.jpg';
+    const urls = [
+        path + 'px' + format, path + 'nx' + format,
+        path + 'py' + format, path + 'ny' + format,
+        path + 'pz' + format, path + 'nz' + format
+    ];
+    
+    const loader = new THREE.CubeTextureLoader();
+    const envMap = loader.load(urls);
+    
+    scene.environment = envMap;
+}
+
+function onDoubleClick(event) {
+    // Toggle camera following cursor
+    cameraFollowsCursor = !cameraFollowsCursor;
+    
+    // Provide visual feedback (could be improved with a UI indicator)
+    const feedbackColor = cameraFollowsCursor ? 0x007700 : 0x770000;
+    const originalColor = scene.background.getHex();
+    
+    // Brief flash to indicate the change
+    scene.background.setHex(feedbackColor);
+    setTimeout(() => {
+        scene.background.setHex(originalColor);
+    }, 200);
+}
+
+function createConnectionsNearParticle(targetParticle) {
+    
+    const maxConnections = 3;
+    const blendRadius = targetParticle.size * 3.5;
+    let connections = 0;
+    
+    for (let i = 0; i < particles.length; i++) {
+        const particle = particles[i];
+        
+        // Skip the target particle itself
+        if (particle === targetParticle) continue;
+        
+        const distance = particle.position.distanceTo(targetParticle.position);
+        
+        // If particles are close enough, create a connection
+        if (distance < blendRadius && connections < maxConnections) {
+            createClayConnection(particle, targetParticle, distance);
+            connections++;
+        }
+    }
+}
+
+function createClayConnection(particle1, particle2, distance) {
+    // Calculate midpoint between particles
+    const midpoint = new THREE.Vector3().addVectors(
+        particle1.position, 
+        particle2.position
+    ).multiplyScalar(0.5);
+    
+    
+    const direction = new THREE.Vector3().subVectors(
+        particle2.position,
+        particle1.position
+    ).normalize();
+    
+    // Create a small cylinder/bridge between the particles
+    const length = distance * 0.8; // Slightly shorter than actual distance
+    const radius = Math.min(particle1.size, particle2.size) * 0.45;
+    
+    // Create the connector geometry (cylinder)
+    const geometry = new THREE.CylinderGeometry(
+        radius, // radiusTop
+        radius, // radiusBottom
+        length, // height
+        8,      // radialSegments
+        3,      // heightSegments
+        true    // openEnded
+    );
+    
+    // Create the connector material - match clay appearance
+    const material = new THREE.MeshPhysicalMaterial({
+        color: clayColor,
+        metalness: 0.1,
+        roughness: 0.55,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.25,
+        reflectivity: 0.3,
+        envMapIntensity: 0.5,
+        emissive: new THREE.Color(clayColor).multiplyScalar(0.05)
+    });
+    
+    // Create the connector mesh
+    
+    const connector = new THREE.Mesh(geometry, material);
+    
+    // Position and rotate the connector
+    connector.position.copy(midpoint);
+    
+    // Orient cylinder along the direction between particles
+    const axis = new THREE.Vector3(0, 1, 0);
+    connector.quaternion.setFromUnitVectors(axis, direction);
+    
+    // Add to scene
+    clayMesh.add(connector);
+    
+    // Store reference to connector in particles for cleanup/update later
+    if (!particle1.connections) particle1.connections = [];
+    if (!particle2.connections) particle2.connections = [];
+    
+    particle1.connections.push(connector);
+    particle2.connections.push(connector);
 }
