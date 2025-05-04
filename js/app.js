@@ -12,6 +12,10 @@ let rotationSpeed = 0.001;
 let fogEnabled = true;
 let shadowsEnabled = true;
 let cameraFollowsCursor = true;
+// Clay texture settings
+let clayTextureEnabled = true;
+let clayTextureScale = 0.3;  
+let clayTextureDepth = 0.1;  // Much lower depth for minimal surface irregularities
 let clayColor = 0xe8c291;
 const clayColors = {
     'Classic Clay': 0xe8c291,
@@ -58,6 +62,11 @@ let metaballMesh = null;
 let metaballMaterial = null;
 let particleInfluence = 1.3; 
 let claySmoothing = 0.85;  
+
+// Create textures once and reuse them
+let clayNoiseTexture = null;
+let clayNormalMap = null;
+let clayRoughnessMap = null;
 
 init();
 animate();
@@ -117,6 +126,17 @@ function init() {
     pointLight.position.set(50, 50, 50);
     pointLight.castShadow = shadowsEnabled;
     scene.add(pointLight);
+    
+    // Create the clay textures once during initialization
+    if (clayTextureEnabled) {
+        clayNoiseTexture = createNoiseTexture();
+        
+        // Create normal map from the noise texture
+        clayNormalMap = createNormalMapFromTexture(clayNoiseTexture);
+        
+        // Use the noise texture as a roughness map too
+        clayRoughnessMap = clayNoiseTexture.clone();
+    }
     
     createClayParticles();
     
@@ -510,26 +530,37 @@ function addParticle(x, y, z, size) {
     if (particleCount >= maxParticles) return;
     
     // Use higher quality geometry for better 3D appearance
-    const geometry = new THREE.SphereGeometry(size, 12, 10);
+    const geometry = new THREE.SphereGeometry(size, 16, 14);
     
-    // Enhanced material with better visibility
+    // Enhanced material with smooth clay-like appearance
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
-        metalness: 0.1,
-        roughness: 0.5,     // Less roughness for more sheen
-        clearcoat: 0.6,     // More clearcoat for better highlights
-        clearcoatRoughness: 0.2,
-        reflectivity: 0.3,  // More reflectivity
-        envMapIntensity: 0.6,
-        transparent: false, // No transparency for better visibility
+        metalness: 0.08,
+        roughness: 0.3,      
+        clearcoat: 0.7,      
+        clearcoatRoughness: 0.2,  
+        reflectivity: 0.25,
+        envMapIntensity: 0.4,
+        flatShading: false,  // No flat shading for smoother look
         emissive: new THREE.Color(clayColor).multiplyScalar(0.05) // Subtle glow
     });
+    
+    // If texture is enabled, apply it subtly for a shapeable look
+    if (clayTextureEnabled && clayNoiseTexture) {
+        // Very minimal displacement for subtle texture
+        material.displacementMap = clayNoiseTexture;
+        material.displacementScale = 0.01 * size;
+        
+        // Very subtle bump mapping
+        material.bumpMap = clayNoiseTexture;
+        material.bumpScale = 0.01;
+    }
     
     const particle = new THREE.Mesh(geometry, material);
     particle.position.set(x, y, z);
     
-    // Make particles larger to create overlapping effect that looks more clay-like
-    particle.scale.set(particleInfluence, particleInfluence, particleInfluence);
+    // Make particles larger to create better blending effect
+    particle.scale.set(particleInfluence * 1.1, particleInfluence * 1.1, particleInfluence * 1.1);
     
     // Enable shadows for particles
     particle.castShadow = true;
@@ -1227,4 +1258,119 @@ function createClayConnection(particle1, particle2, distance) {
     
     particle1.connections.push(connector);
     particle2.connections.push(connector);
+}
+
+function createNoiseTexture() {
+    // Create a canvas to generate noise texture
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Fill with noise
+    const imageData = ctx.createImageData(size, size);
+    const data = imageData.data;
+    
+    for (let i = 0; i < size * size; i++) {
+        // Random noise with clay-like patterns
+        const x = i % size;
+        const y = Math.floor(i / size);
+        
+        // Create multi-frequency noise for more natural texture
+        const highFreq = Math.random() * 0.3;
+        const medFreq = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 0.2;
+        const lowFreq = Math.sin(x * 0.01 + y * 0.01) * 0.1;
+        
+        // Combine frequencies
+        const noiseVal = 0.6 + highFreq + medFreq + lowFreq;
+        
+        // Add subtle color variation for more realism
+        const val = Math.floor(255 * Math.min(1, Math.max(0, noiseVal)));
+        
+        data[i * 4] = val;     // R
+        data[i * 4 + 1] = val; // G
+        data[i * 4 + 2] = val; // B
+        data[i * 4 + 3] = 255; // A
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Convert to texture
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(3, 3);
+    
+    return texture;
+}
+
+function createNormalMapFromTexture(texture) {
+    // Create normal map from height map
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw the texture to the canvas
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = size;
+    tmpCanvas.height = size;
+    const tmpCtx = tmpCanvas.getContext('2d');
+    
+    // Need to set up a dummy image with the texture data
+    const img = document.createElement('img');
+    img.src = texture.image.toDataURL();
+    
+    // Process once image is loaded
+    return new Promise((resolve) => {
+        img.onload = function() {
+            tmpCtx.drawImage(img, 0, 0, size);
+            const imgData = tmpCtx.getImageData(0, 0, size);
+            
+            // Create normal map
+            const normalData = ctx.createImageData(size, size);
+            
+            // Calculate normals based on height differences
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const index = (y * size + x) * 4;
+                    
+                    // Get heights at neighboring pixels
+                    const left = x > 0 ? imgData.data[index - 4] / 255 : 0;
+                    const right = x < size - 1 ? imgData.data[index + 4] / 255 : 0;
+                    const up = y > 0 ? imgData.data[index - size * 4] / 255 : 0;
+                    const down = y < size - 1 ? imgData.data[index + size * 4] / 255 : 0;
+                    
+                    // Calculate normal vector using Sobel operator
+                    const dx = (right - left) * 2.0;
+                    const dy = (down - up) * 2.0;
+                    const dz = 1.0 / clayTextureDepth;  // Adjust for height intensity
+                    
+                    // Normalize
+                    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    const nx = dx / length;
+                    const ny = dy / length;
+                    const nz = dz / length;
+                    
+                    // Set normal map color (normal vector -> RGB)
+                    normalData.data[index] = Math.floor((nx * 0.5 + 0.5) * 255);     // R
+                    normalData.data[index + 1] = Math.floor((ny * 0.5 + 0.5) * 255); // G
+                    normalData.data[index + 2] = Math.floor((nz * 0.5 + 0.5) * 255); // B
+                    normalData.data[index + 3] = 255; // A
+                }
+            }
+            
+            ctx.putImageData(normalData, 0, 0);
+            
+            // Create normal map texture
+            const normalMap = new THREE.CanvasTexture(canvas);
+            normalMap.wrapS = THREE.RepeatWrapping;
+            normalMap.wrapT = THREE.RepeatWrapping;
+            normalMap.repeat.set(3, 3);
+            
+            resolve(normalMap);
+        };
+    });
 }
