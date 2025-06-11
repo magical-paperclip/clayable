@@ -1,3 +1,6 @@
+import { ClaySculptor } from './clay.js';
+import { ImageUpload } from './components/ImageUpload.js';
+
 let container;
 let camera, scene, renderer;
 let controls;
@@ -67,6 +70,9 @@ let claySmoothing = 0.85;
 let clayNoiseTexture = null;
 let clayNormalMap = null;
 let clayRoughnessMap = null;
+
+let claySculptor;
+let imageUpload;
 
 init();
 animate();
@@ -193,6 +199,28 @@ function init() {
     
     // Create environment map for reflections
     createEnvironmentMap();
+
+    // Initialize the clay sculptor
+    claySculptor = new ClaySculptor();
+
+    // Setup image upload
+    const controlsContainer = document.querySelector('.controls');
+    imageUpload = new ImageUpload(controlsContainer);
+
+    // Listen for image upload events
+    document.addEventListener('imageUploaded', (e) => {
+        const file = e.detail.file;
+        if (file) {
+            claySculptor.processImage(file);
+        }
+    });
+
+    // Add keyboard shortcut for image upload
+    document.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 'i') {
+            document.getElementById('image-upload').click();
+        }
+    });
 }
 
 function createUI() {
@@ -1374,3 +1402,38 @@ function createNormalMapFromTexture(texture) {
         };
     });
 }
+
+class App {
+    constructor() {
+        this.setupApp();
+    }
+
+    setupApp() {
+        // Initialize the clay sculptor
+        this.claySculptor = new ClaySculptor();
+
+        // Setup image upload
+        const controlsContainer = document.querySelector('.controls');
+        this.imageUpload = new ImageUpload(controlsContainer);
+
+        // Listen for image upload events
+        document.addEventListener('imageUploaded', (e) => {
+            const file = e.detail.file;
+            if (file) {
+                this.claySculptor.processImage(file);
+            }
+        });
+
+        // Add keyboard shortcut for image upload
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'i') {
+                document.getElementById('image-upload').click();
+            }
+        });
+    }
+}
+
+// Initialize the application when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new App();
+});
