@@ -52,3 +52,62 @@ Clayable is an interactive web application that simulates clay sculpting using a
 ## License
 
 MIT
+
+## About
+
+clayable.vercel.app
+
+### Resources
+
+ Readme 
+
+###  Uh oh!
+
+There was an error while loading. Please reload this page.
+
+Activity 
+
+### Stars
+
+**1** star 
+
+### Watchers
+
+**1** watching 
+
+### Forks
+
+**0** forks 
+
+ Report repository 
+
+## Releases
+
+No releases published
+
+## Packages0
+
+ No packages published   
+
+## Languages
+
+* JavaScript 84.8%
+* CSS 13.0%
+* HTML 2.2%
+
+## Footer
+
+ © 2025 GitHub, Inc. 
+
+### Footer navigation
+
+* Terms
+* Privacy
+* Security
+* Status
+* Docs
+* Contact
+* Manage cookies
+* Do not share my personal information
+
+ You can't perform that action at this time.
