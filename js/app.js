@@ -74,6 +74,8 @@ let clayRoughnessMap = null;
 let claySculptor;
 let imageUpload;
 
+const PORT = 30001; // Updated port for local development
+
 init();
 animate();
 
