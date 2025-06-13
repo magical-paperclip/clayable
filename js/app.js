@@ -1,3 +1,4 @@
+// Remove Three.js imports since we're using the global object
 import { ClaySculptor } from './clay.js';
 import { ImageUpload } from './components/ImageUpload.js';
 
@@ -9,16 +10,16 @@ let isMouseDown = false;
 let lastMousePosition = new THREE.Vector2();
 let clock = new THREE.Clock();
 
-// Enhanced 3D settings
+
 let turntable = false;
 let rotationSpeed = 0.001;
 let fogEnabled = true;
 let shadowsEnabled = true;
 let cameraFollowsCursor = true;
-// Clay texture settings
+
 let clayTextureEnabled = true;
 let clayTextureScale = 0.3;  
-let clayTextureDepth = 0.1;  // Much lower depth for minimal surface irregularities
+let clayTextureDepth = 0.1;  
 let clayColor = 0xe8c291;
 const clayColors = {
     'Classic Clay': 0xe8c291,
@@ -56,7 +57,7 @@ let particles = [];
 let clayMesh;
 
 let uiInfo;
-// Add raycaster for 3D drawing
+
 let raycaster = new THREE.Raycaster();
 
 
@@ -66,7 +67,7 @@ let metaballMaterial = null;
 let particleInfluence = 1.3; 
 let claySmoothing = 0.85;  
 
-// Create textures once and reuse them
+
 let clayNoiseTexture = null;
 let clayNormalMap = null;
 let clayRoughnessMap = null;
@@ -74,343 +75,226 @@ let clayRoughnessMap = null;
 let claySculptor;
 let imageUpload;
 
-const PORT = 3001; // Updated port for local development
+const PORT = 3001; 
 
 init();
 animate();
 
 function init() {
-    container = document.getElementById('container');
-    
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x222222);
-    
-    
-    if (fogEnabled) {
-        scene.fog = new THREE.FogExp2(0x222222, 0.0008);
-    }
-    
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
-    camera.position.set(0, 0, 500);
-    
-    // Improved lighting setup - brighter lights
-    const ambientLight = new THREE.AmbientLight(0x808080, 1.0);  // Brighter ambient light
-    scene.add(ambientLight);
-    
-    // Main directional light with shadows - brighter
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(1, 1, 1).normalize();
-    directionalLight.castShadow = shadowsEnabled;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    directionalLight.shadow.camera.near = 10;
-    directionalLight.shadow.camera.far = 1000;
-    directionalLight.shadow.camera.left = -300;
-    directionalLight.shadow.camera.right = 300;
-    directionalLight.shadow.camera.top = 300;
-    directionalLight.shadow.camera.bottom = -300;
-    directionalLight.shadow.bias = -0.001;
-    scene.add(directionalLight);
-    
-    // Bottom light for fill - brighter
-    const bottomLight = new THREE.DirectionalLight(0xffc0cb, 0.5);
-    bottomLight.position.set(0, -1, 0).normalize();
-    scene.add(bottomLight);
-    
-    // Add rim light for 3D effect - brighter
-    const rimLight = new THREE.DirectionalLight(0x6aabff, 0.7);
-    rimLight.position.set(-1, 0, -1).normalize();
-    scene.add(rimLight);
-    
-    // Add frontal light to better illuminate the clay
-    const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    frontLight.position.set(0, 0, 1).normalize();
-    scene.add(frontLight);
-    
-    // Add point light for local highlights - brighter
-    const pointLight = new THREE.PointLight(0xffffff, 0.7, 300);
-    pointLight.position.set(50, 50, 50);
-    pointLight.castShadow = shadowsEnabled;
-    scene.add(pointLight);
-    
-    // Create the clay textures once during initialization
-    if (clayTextureEnabled) {
-        clayNoiseTexture = createNoiseTexture();
-        
-        // Create normal map from the noise texture
-        clayNormalMap = createNormalMapFromTexture(clayNoiseTexture);
-        
-        // Use the noise texture as a roughness map too
-        clayRoughnessMap = clayNoiseTexture.clone();
-    }
-    
-    createClayParticles();
-    
-    // Improved renderer with shadows
-    renderer = new THREE.WebGLRenderer({ 
-        antialias: true,
-        powerPreference: "high-performance"
-    });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(width, height);
-    renderer.shadowMap.enabled = shadowsEnabled;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.physicallyCorrectLights = true;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;  // Increased exposure
-    container.appendChild(renderer.domElement);
-    
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.rotateSpeed = 0.5;
-    
-    // Add a ground plane for shadows to fall on
-    if (shadowsEnabled) {
-        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
-        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-        groundPlane.rotation.x = -Math.PI / 2;
-        groundPlane.position.y = -100;
-        groundPlane.receiveShadow = true;
-        scene.add(groundPlane);
-    }
-    
-    createUI();
-    
-    window.addEventListener('resize', onWindowResize);
-    
-    container.addEventListener('mousemove', onMouseMove);
-    container.addEventListener('mousedown', onMouseDown);
-    container.addEventListener('mouseup', onMouseUp);
-    container.addEventListener('dblclick', onDoubleClick); // Add double-click handler
-    
-    container.addEventListener('touchmove', onTouchMove);
-    container.addEventListener('touchstart', () => { 
-        isMouseDown = true;
-        if (mouseMode === 'draw') startDrawing();
-    });
-    container.addEventListener('touchend', () => { 
-        isMouseDown = false;
-        if (mouseMode === 'draw') endDrawing();
-    });
-    
-    window.addEventListener('keydown', onKeyDown);
-    
-    // Create environment map for reflections
-    createEnvironmentMap();
-
-    // Initialize the clay sculptor
-    claySculptor = new ClaySculptor();
-
-    // Setup image upload
-    const controlsContainer = document.querySelector('.controls');
-    imageUpload = new ImageUpload(controlsContainer);
-
-    // Listen for image upload events
-    document.addEventListener('imageUploaded', (e) => {
-        const file = e.detail.file;
-        if (file) {
-            claySculptor.processImage(file);
+    try {
+        container = document.getElementById('canvas-container');
+        if (!container) {
+            console.error('Canvas container not found!');
+            return;
         }
-    });
-
-    // Add keyboard shortcut for image upload
-    document.addEventListener('keydown', (e) => {
-        if (e.key.toLowerCase() === 'i') {
-            document.getElementById('image-upload').click();
+        
+        // Create UI first
+        createUI();
+        
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        
+        if (fogEnabled) {
+            scene.fog = new THREE.FogExp2(0x222222, 0.0008);
         }
-    });
+        
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
+        camera.position.set(0, 0, 500);
+        
+        // Enhanced lighting setup for playdough-like appearance
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        
+        // Main directional light
+        const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        mainLight.position.set(1, 1, 1).normalize();
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        mainLight.shadow.camera.near = 10;
+        mainLight.shadow.camera.far = 1000;
+        mainLight.shadow.camera.left = -300;
+        mainLight.shadow.camera.right = 300;
+        mainLight.shadow.camera.top = 300;
+        mainLight.shadow.camera.bottom = -300;
+        mainLight.shadow.bias = -0.001;
+        scene.add(mainLight);
+        
+        // Fill light
+        const fillLight = new THREE.DirectionalLight(0xffc0cb, 0.3);
+        fillLight.position.set(-1, 0.5, -1).normalize();
+        scene.add(fillLight);
+        
+        // Rim light for 3D effect
+        const rimLight = new THREE.DirectionalLight(0x6aabff, 0.4);
+        rimLight.position.set(0, -1, -1).normalize();
+        scene.add(rimLight);
+        
+        
+        const envMap = createEnvironmentMap();
+        scene.environment = envMap;
+        
+       
+        claySculptor = new ClaySculptor(scene);
+        
+        
+        const controlsDiv = document.querySelector('.controls');
+        if (controlsDiv) {
+            imageUpload = new ImageUpload(controlsDiv);
+        } else {
+            console.error('Controls div not found!');
+        }
+        
+        
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(width, height);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.physicallyCorrectLights = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+        
+        
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 0.5;
+        
+        
+        window.addEventListener('resize', onWindowResize);
+        container.addEventListener('mousemove', onMouseMove);
+        container.addEventListener('mousedown', onMouseDown);
+        container.addEventListener('mouseup', onMouseUp);
+        container.addEventListener('dblclick', onDoubleClick);
+        
+        
+        createClayParticles();
+        
+        
+        animate();
+    } catch (error) {
+        console.error('Error during initialization:', error);
+    }
 }
 
 function createUI() {
-    uiInfo = document.getElementById('ui-container');
+    const controlsDiv = document.querySelector('.controls');
+    if (!controlsDiv) {
+        console.error('Controls div not found!');
+        return;
+    }
     
-    const toolsLabel = document.createElement('div');
-    toolsLabel.className = 'tools-label';
-    toolsLabel.textContent = 'Basic Tools';
-    uiInfo.appendChild(toolsLabel);
     
-    const toolsDiv = document.createElement('div');
-    toolsDiv.className = 'tools';
+    const toggle = document.createElement('div');
+    toggle.className = 'controls-toggle';
+    toggle.textContent = '▼';
+    controlsDiv.appendChild(toggle);
     
-    const addButton = document.createElement('button');
-    addButton.textContent = 'Add Clay (A)';
-    addButton.className = 'active';
-    addButton.onclick = () => {
-        setMouseMode('add');
-        setSpecialTool(null);
-    };
+    // Add click handler for toggle
+    toggle.addEventListener('click', () => {
+        controlsDiv.classList.toggle('collapsed');
+        toggle.textContent = controlsDiv.classList.contains('collapsed') ? '▲' : '▼';
+    });
+
     
-    const removeButton = document.createElement('button');
-    removeButton.textContent = 'Remove Clay (S)';
-    removeButton.onclick = () => {
-        setMouseMode('remove');
-        setSpecialTool(null);
-    };
+    const toolGroup = document.createElement('div');
+    toolGroup.className = 'tool-group';
     
-    const smoothButton = document.createElement('button');
-    smoothButton.textContent = 'Smooth Clay (D)';
-    smoothButton.onclick = () => {
-        setMouseMode('smooth');
-        setSpecialTool(null);
-    };
     
-    // Add new draw button
-    const drawButton = document.createElement('button');
-    drawButton.textContent = 'Draw 3D (F)';
-    drawButton.onclick = () => {
-        setMouseMode('draw');
-        setSpecialTool(null);
-    };
+    const tools = [
+        { id: 'add', label: 'Add Clay' },
+        { id: 'remove', label: 'Remove Clay' },
+        { id: 'smooth', label: 'Smooth' }
+    ];
     
-    const resetButton = document.createElement('button');
-    resetButton.textContent = 'Reset Clay (R)';
-    resetButton.onclick = resetClay;
-    
-    toolsDiv.appendChild(addButton);
-    toolsDiv.appendChild(removeButton);
-    toolsDiv.appendChild(smoothButton);
-    toolsDiv.appendChild(drawButton);
-    toolsDiv.appendChild(resetButton);
-    
-    uiInfo.appendChild(toolsDiv);
-    
-    // Add line thickness control
-    const lineThicknessDiv = document.createElement('div');
-    lineThicknessDiv.className = 'size-control';
-    lineThicknessDiv.style.display = 'none';
-    lineThicknessDiv.id = 'line-thickness-control';
-    
-    const thicknessLabel = document.createElement('label');
-    thicknessLabel.textContent = 'Line Thickness';
-    thicknessLabel.htmlFor = 'line-thickness';
-    
-    const thicknessContainer = document.createElement('div');
-    thicknessContainer.className = 'slider-container';
-    
-    const thicknessSlider = document.createElement('input');
-    thicknessSlider.type = 'range';
-    thicknessSlider.min = '1';
-    thicknessSlider.max = '10';
-    thicknessSlider.value = lineThickness;
-    thicknessSlider.id = 'line-thickness';
-    thicknessSlider.oninput = () => {
-        lineThickness = parseInt(thicknessSlider.value);
-        thicknessValue.textContent = lineThickness;
-    };
-    
-    const thicknessValue = document.createElement('span');
-    thicknessValue.textContent = lineThickness;
-    thicknessValue.id = 'thickness-value';
-    
-    thicknessContainer.appendChild(thicknessSlider);
-    thicknessContainer.appendChild(thicknessValue);
-    
-    lineThicknessDiv.appendChild(thicknessLabel);
-    lineThicknessDiv.appendChild(thicknessContainer);
-    
-    uiInfo.appendChild(lineThicknessDiv);
-    
-    const divider1 = document.createElement('div');
-    divider1.className = 'section-divider';
-    uiInfo.appendChild(divider1);
-    
-    const specialToolsDiv = document.createElement('div');
-    specialToolsDiv.className = 'special-tools';
-    
-    const specialToolsLabel = document.createElement('div');
-    specialToolsLabel.className = 'tools-label';
-    specialToolsLabel.textContent = 'Specialized Tools';
-    specialToolsDiv.appendChild(specialToolsLabel);
-    
-    const specialButtonsDiv = document.createElement('div');
-    specialButtonsDiv.className = 'tool-buttons';
-    
-    Object.entries(specializedTools).forEach(([id, tool]) => {
-        const toolButton = document.createElement('button');
-        toolButton.textContent = tool.name;
-        toolButton.className = 'tool-btn';
-        toolButton.onclick = () => setSpecialTool(id);
-        specialButtonsDiv.appendChild(toolButton);
+    tools.forEach(tool => {
+        const button = document.createElement('button');
+        button.textContent = tool.label;
+        button.dataset.tool = tool.id;
+        button.addEventListener('click', () => setMouseMode(tool.id));
+        toolGroup.appendChild(button);
     });
     
-    specialToolsDiv.appendChild(specialButtonsDiv);
     
-    const sizeControlDiv = document.createElement('div');
-    sizeControlDiv.className = 'size-control';
+    const stampGroup = document.createElement('div');
+    stampGroup.className = 'stamp-group';
     
-    const sizeLabel = document.createElement('label');
-    sizeLabel.textContent = 'Tool Size';
-    sizeLabel.htmlFor = 'tool-size';
     
-    const sliderContainer = document.createElement('div');
-    sliderContainer.className = 'slider-container';
+    const stamps = [
+        { id: 'stamp-sphere', label: 'Sphere' },
+        { id: 'stamp-cube', label: 'Cube' },
+        { id: 'pattern-spiral', label: 'Spiral' },
+        { id: 'pattern-ring', label: 'Ring' }
+    ];
     
+    stamps.forEach(stamp => {
+        const button = document.createElement('button');
+        button.textContent = stamp.label;
+        button.dataset.stamp = stamp.id;
+        button.addEventListener('click', () => setSpecialTool(stamp.id));
+        stampGroup.appendChild(button);
+    });
+    
+    // Create color group
+    const colorGroup = document.createElement('div');
+    colorGroup.className = 'color-group';
+    
+    // Add color buttons
+    Object.entries(clayColors).forEach(([name, color]) => {
+        const button = document.createElement('button');
+        button.className = 'color-btn';
+        button.dataset.color = name;
+        button.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
+        button.addEventListener('click', () => setClayColor(name, color));
+        colorGroup.appendChild(button);
+    });
+    
+    // Create brush size group
+    const brushGroup = document.createElement('div');
+    brushGroup.className = 'brush-group';
+    
+    // Add brush size slider
     const sizeSlider = document.createElement('input');
     sizeSlider.type = 'range';
-    sizeSlider.min = '5';
-    sizeSlider.max = '30';
+    sizeSlider.className = 'brush-size';
+    sizeSlider.min = '1';
+    sizeSlider.max = '50';
     sizeSlider.value = toolSize;
-    sizeSlider.id = 'tool-size';
-    sizeSlider.oninput = () => {
-        toolSize = parseInt(sizeSlider.value);
-        sizeValue.textContent = toolSize;
-    };
-    
-    const sizeValue = document.createElement('span');
-    sizeValue.textContent = toolSize;
-    sizeValue.id = 'size-value';
-    
-    sliderContainer.appendChild(sizeSlider);
-    sliderContainer.appendChild(sizeValue);
-    
-    sizeControlDiv.appendChild(sizeLabel);
-    sizeControlDiv.appendChild(sliderContainer);
-    
-    specialToolsDiv.appendChild(sizeControlDiv);
-    uiInfo.appendChild(specialToolsDiv);
-    
-    const divider2 = document.createElement('div');
-    divider2.className = 'section-divider';
-    uiInfo.appendChild(divider2);
-    
-    const colorsDiv = document.createElement('div');
-    colorsDiv.className = 'colors';
-    
-    const colorLabel = document.createElement('div');
-    colorLabel.className = 'color-label';
-    colorLabel.textContent = 'Clay Color';
-    colorsDiv.appendChild(colorLabel);
-    
-    const colorButtonsDiv = document.createElement('div');
-    colorButtonsDiv.className = 'color-buttons';
-    
-    Object.entries(clayColors).forEach(([name, colorValue]) => {
-        const colorButton = document.createElement('button');
-        colorButton.className = 'color-btn';
-        colorButton.title = name;
-        colorButton.style.backgroundColor = '#' + colorValue.toString(16).padStart(6, '0');
-        
-        if (colorValue === clayColor) {
-            colorButton.classList.add('active');
-        }
-        
-        colorButton.onclick = () => setClayColor(name, colorValue);
-        colorButtonsDiv.appendChild(colorButton);
+    sizeSlider.addEventListener('input', (e) => {
+        toolSize = parseInt(e.target.value);
     });
     
-    colorsDiv.appendChild(colorButtonsDiv);
-    uiInfo.appendChild(colorsDiv);
+    const sizeLabel = document.createElement('span');
+    sizeLabel.className = 'brush-size-label';
+    sizeLabel.textContent = `${toolSize}px`;
     
-    const footer = document.createElement('div');
-    footer.className = 'footer';
-    footer.textContent = '© 2025 clayable - rotate with mouse, pinch to zoom';
-    document.body.appendChild(footer);
+    sizeSlider.addEventListener('input', (e) => {
+        toolSize = parseInt(e.target.value);
+        sizeLabel.textContent = `${toolSize}px`;
+    });
     
-    setupPanelToggle();
+    brushGroup.appendChild(sizeSlider);
+    brushGroup.appendChild(sizeLabel);
+    
+    // Append all groups to controls
+    controlsDiv.appendChild(toolGroup);
+    controlsDiv.appendChild(stampGroup);
+    controlsDiv.appendChild(colorGroup);
+    controlsDiv.appendChild(brushGroup);
+    
+    // Set initial active state
+    const addButton = toolGroup.querySelector('[data-tool="add"]');
+    if (addButton) {
+        addButton.classList.add('active');
+    }
 }
 
 function setMouseMode(mode) {
@@ -463,6 +347,9 @@ function onKeyDown(event) {
             break;
         case 'r':
             resetClay();
+            break;
+        case 't':
+            turntable = !turntable;
             break;
     }
 }
@@ -623,6 +510,10 @@ function removeParticle(index) {
 }
 
 function resetClay() {
+    if (claySculptor) {
+        claySculptor.reset();
+    }
+    
     // Clear all clay particles
     while (particles.length > 0) {
         removeParticle(0);
@@ -686,31 +577,56 @@ function onWindowResize() {
 }
 
 function onMouseMove(event) {
-    mousePosition.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mousePosition.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    if (!isMouseDown) return;
     
-    if (isMouseDown) {
+    const rect = container.getBoundingClientRect();
+    mousePosition.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePosition.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    // Update raycaster
+    raycaster.setFromCamera(mousePosition, camera);
+    
+    // Get intersection point
+    const intersects = raycaster.intersectObjects([claySculptor.metaballMesh]);
+    if (intersects.length > 0) {
+        const point = intersects[0].point;
+        
+        // Add particles along the path from last position to current position
+        if (lastMousePosition) {
+            claySculptor.addParticlesAlongPath(lastMousePosition, point, toolSize);
+        }
+        
+        // Update last position
+        lastMousePosition = point.clone();
+        
+        // Apply tool effect
         interactWithClay();
     }
-    
-    lastMousePosition.copy(mousePosition);
 }
 
 // Add new mousedown and mouseup event handlers for drawing
 function onMouseDown(event) {
     isMouseDown = true;
+    lastMousePosition = null;
     
-    if (mouseMode === 'draw') {
-        startDrawing();
+    const rect = container.getBoundingClientRect();
+    mousePosition.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePosition.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    // Update raycaster
+    raycaster.setFromCamera(mousePosition, camera);
+    
+    // Get intersection point
+    const intersects = raycaster.intersectObjects([claySculptor.metaballMesh]);
+    if (intersects.length > 0) {
+        lastMousePosition = intersects[0].point.clone();
+        interactWithClay();
     }
 }
 
 function onMouseUp(event) {
     isMouseDown = false;
-    
-    if (mouseMode === 'draw') {
-        endDrawing();
-    }
+    lastMousePosition = null;
 }
 
 function onTouchMove(event) {
@@ -725,125 +641,122 @@ function onTouchMove(event) {
 }
 
 function interactWithClay() {
-    const vector = new THREE.Vector3(mousePosition.x, mousePosition.y, 0.5);
-    vector.unproject(camera);
-    
-    const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
-    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-    
-    if (mouseMode === 'draw') {
-        if (isDrawing) {
-            
-            if (cameraFixedPosition && cameraFixedQuaternion) {
-                camera.position.copy(cameraFixedPosition);
-                camera.quaternion.copy(cameraFixedQuaternion);
-            }
-            updateDrawing(pos);
-        }
-        return;
-    }
-    
-    if (activeSpecialTool) {
-        switch (activeSpecialTool) {
-            case 'stamp-sphere':
-                applyStampSphere(pos, toolSize);
-                break;
-            case 'stamp-cube':
-                applyStampCube(pos, toolSize);
-                break;
-            case 'pattern-spiral':
-                applyPatternSpiral(pos, toolSize);
-                break;
-            case 'pattern-ring':
-                applyPatternRing(pos, toolSize);
-                break;
-            case 'tool-flatten':
-                applyFlattenTool(pos, toolSize, specializedTools['tool-flatten'].strength);
-                break;
-        }
-        return;
-    }
+    if (!lastMousePosition) return;
     
     switch (mouseMode) {
         case 'add':
-            const size = 5 + Math.random() * 5;
-            addParticle(pos.x, pos.y, pos.z, size);
-            
-            if (lastMousePosition.distanceTo(mousePosition) > 0.01) {
-                const steps = 3;
-                const deltaX = (mousePosition.x - lastMousePosition.x) / steps;
-                const deltaY = (mousePosition.y - lastMousePosition.y) / steps;
+            // Add clay with more natural distribution and better blending
+            for (let i = 0; i < 3; i++) {
+                const offset = new THREE.Vector3(
+                    (Math.random() - 0.5) * toolSize,
+                    (Math.random() - 0.5) * toolSize,
+                    (Math.random() - 0.5) * toolSize
+                );
+                const position = lastMousePosition.clone().add(offset);
+                const size = toolSize * (0.8 + Math.random() * 0.4);
                 
-                for (let i = 1; i < steps; i++) {
-                    const x = lastMousePosition.x + deltaX * i;
-                    const y = lastMousePosition.y + deltaY * i;
-                    
-                    const v = new THREE.Vector3(x, y, 0.5);
-                    v.unproject(camera);
-                    
-                    const d = v.sub(camera.position).normalize();
-                    const dist = -camera.position.z / d.z;
-                    const p = camera.position.clone().add(d.multiplyScalar(dist));
-                    
-                    const intermediateSize = 3 + Math.random() * 4;
-                    addParticle(p.x, p.y, p.z, intermediateSize);
+                // Add particle with enhanced properties
+                const particle = claySculptor.addParticle(
+                    position.x,
+                    position.y,
+                    position.z,
+                    size
+                );
+                
+                // Create connections with nearby particles for better blending
+                if (particle) {
+                    createConnectionsNearParticle(particle);
                 }
             }
             break;
             
         case 'remove':
-            removeNearbyParticles(pos, 15);
+            // Remove clay with smoother falloff and better edge blending
+            const radius = toolSize * 1.5;
+            const falloff = 0.7;
+            const particlesToRemove = [];
+            
+            claySculptor.particles.forEach((particle, index) => {
+                const distance = particle.position.distanceTo(lastMousePosition);
+                if (distance < radius) {
+                    const strength = Math.pow(1 - distance / radius, falloff);
+                    if (Math.random() < strength) {
+                        particlesToRemove.push(index);
+                    } else {
+                        // Push nearby particles away for better edge effect
+                        const pushDirection = particle.position.clone()
+                            .sub(lastMousePosition)
+                            .normalize()
+                            .multiplyScalar(strength * 0.5);
+                        particle.position.add(pushDirection);
+                    }
+                }
+            });
+            
+            // Remove particles in reverse order to maintain correct indices
+            for (let i = particlesToRemove.length - 1; i >= 0; i--) {
+                claySculptor.removeParticle(particlesToRemove[i]);
+            }
             break;
             
         case 'smooth':
-            smoothNearbyParticles(pos, 30);
+            // Enhanced smoothing with better clay-like behavior and moldability
+            const smoothRadius = toolSize * 2;
+            const smoothStrength = 0.4;
+            const nearbyParticles = claySculptor.particles.filter(particle => 
+                particle.position.distanceTo(lastMousePosition) < smoothRadius
+            );
+            
+            if (nearbyParticles.length > 0) {
+                // Calculate average position and normal for smoothing
+                const center = new THREE.Vector3();
+                const normal = lastMousePosition.clone().sub(camera.position).normalize();
+                
+                nearbyParticles.forEach(particle => center.add(particle.position));
+                center.divideScalar(nearbyParticles.length);
+                
+                // Calculate velocity for momentum effect
+                const velocity = new THREE.Vector3().subVectors(
+                    lastMousePosition,
+                    lastMousePosition.clone().add(normal.multiplyScalar(0.1))
+                );
+                
+                nearbyParticles.forEach(particle => {
+                    const distance = particle.position.distanceTo(lastMousePosition);
+                    const strength = Math.pow(1 - distance / smoothRadius, 2) * smoothStrength;
+                    
+                    // Move particle towards center with momentum
+                    particle.position.lerp(center, strength * 0.5);
+                    
+                    // Add momentum-based movement
+                    const momentum = velocity.clone().multiplyScalar(strength * 0.3);
+                    particle.position.add(momentum);
+                    
+                    // Add slight push in normal direction for better clay-like feel
+                    const pushDirection = normal.clone().multiplyScalar(strength * 0.3);
+                    particle.position.add(pushDirection);
+                    
+                    // Update particle mesh position
+                    if (particle.mesh) {
+                        particle.mesh.position.copy(particle.position);
+                    }
+                });
+                
+                // Update metaball mesh for smooth appearance
+                claySculptor.updateMetaballMesh();
+            }
             break;
     }
-}
-
-function removeNearbyParticles(position, radius) {
-    const tempParticles = [...particles];
     
-    for (let i = tempParticles.length - 1; i >= 0; i--) {
-        const particle = tempParticles[i];
-        const distance = position.distanceTo(particle.position);
-        
-        if (distance < radius) {
-            removeParticle(i);
-        }
-    }
-}
-
-function smoothNearbyParticles(position, radius) {
-    const nearbyParticles = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-        const particle = particles[i];
-        const distance = position.distanceTo(particle.position);
-        
-        if (distance < radius) {
-            nearbyParticles.push(particle);
-        }
-    }
-    
-    if (nearbyParticles.length < 2) return;
-    
-    const avgPos = new THREE.Vector3(0, 0, 0);
-    for (const particle of nearbyParticles) {
-        avgPos.add(particle.position);
-    }
-    avgPos.divideScalar(nearbyParticles.length);
-    
-    for (const particle of nearbyParticles) {
-        const toAvg = new THREE.Vector3().subVectors(avgPos, particle.position);
-        particle.position.add(toAvg.multiplyScalar(0.1));
-        particle.mesh.position.copy(particle.position);
-    }
+    // Always update the metaball mesh after any interaction
+    claySculptor.updateMetaballMesh();
 }
 
 function setClayColor(name, colorValue) {
     clayColor = colorValue;
+    if (claySculptor) {
+        claySculptor.setColor(colorValue);
+    }
     
     const colorButtons = document.querySelectorAll('.color-btn');
     colorButtons.forEach(button => {
@@ -861,55 +774,19 @@ function setClayColor(name, colorValue) {
 function animate() {
     requestAnimationFrame(animate);
     
-    // Only update controls if not in drawing mode
-    if (!isDrawing) {
-        controls.update();
-    } else if (cameraFixedPosition && cameraFixedQuaternion) {
-        // Force camera to stay at the fixed position while drawing
-        camera.position.copy(cameraFixedPosition);
-        camera.quaternion.copy(cameraFixedQuaternion);
+    const deltaTime = clock.getDelta() * 1000; // Convert to milliseconds
+    
+    // Update particles if claySculptor exists
+    if (claySculptor && typeof claySculptor.updateParticles === 'function') {
+        claySculptor.updateParticles(deltaTime);
     }
     
-    // Enhanced 3D animation
-    const time = clock.getElapsedTime();
+    // Update controls
+    if (controls) controls.update();
     
-    // Subtle breathing animation for clay particles
-    animateClayParticles(time);
-    
-    // Optional turntable rotation for showcasing the model
-    if (turntable) {
-        clayMesh.rotation.y += rotationSpeed;
-    }
-    
-    renderer.render(scene, camera);
-}
-
-function animateClayParticles(time) {
-    // Apply subtle movement to particles to enhance 3D look
-    for (let i = 0; i < particles.length; i++) {
-        const particle = particles[i];
-        
-        // Only apply subtle movement to some particles
-        if (i % 3 === 0) {
-            // Get original position
-            const origPos = particle.originalPosition;
-            
-            // Apply sine wave movement with unique phase for each particle
-            const pulseAmplitude = particle.size * 0.03;
-            const pulseSpeed = 1.5;
-            
-            const xOffset = Math.sin(time * pulseSpeed + particle.phase) * pulseAmplitude;
-            const yOffset = Math.cos(time * pulseSpeed + particle.phase * 2) * pulseAmplitude;
-            const zOffset = Math.sin(time * pulseSpeed * 0.7 + particle.phase * 3) * pulseAmplitude;
-            
-            // Apply offset to position
-            particle.position.x = origPos.x + xOffset;
-            particle.position.y = origPos.y + yOffset;
-            particle.position.z = origPos.z + zOffset;
-            
-            // Update mesh position
-            particle.mesh.position.copy(particle.position);
-        }
+    // Render scene
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
     }
 }
 
@@ -1177,19 +1054,34 @@ function addParticlesAlongTube(curve, thickness) {
 }
 
 function createEnvironmentMap() {
-    // Create a cubemap for environment reflections
-    const path = 'https://threejs.org/examples/textures/cube/';
-    const format = '.jpg';
-    const urls = [
-        path + 'px' + format, path + 'nx' + format,
-        path + 'py' + format, path + 'ny' + format,
-        path + 'pz' + format, path + 'nz' + format
-    ];
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
     
-    const loader = new THREE.CubeTextureLoader();
-    const envMap = loader.load(urls);
+    // Create gradient background
+    const gradient = context.createLinearGradient(0, 0, 0, size);
+    gradient.addColorStop(0, '#4a4a4a');
+    gradient.addColorStop(1, '#2a2a2a');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
     
-    scene.environment = envMap;
+    // Add some noise for texture
+    const imageData = context.getImageData(0, 0, size, size);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        const noise = Math.random() * 20;
+        data[i] = Math.min(255, data[i] + noise);     // R
+        data[i + 1] = Math.min(255, data[i + 1] + noise); // G
+        data[i + 2] = Math.min(255, data[i + 2] + noise); // B
+    }
+    context.putImageData(imageData, 0, 0);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    
+    return texture;
 }
 
 function onDoubleClick(event) {
@@ -1208,20 +1100,17 @@ function onDoubleClick(event) {
 }
 
 function createConnectionsNearParticle(targetParticle) {
-    
-    const maxConnections = 3;
-    const blendRadius = targetParticle.size * 3.5;
+    const maxConnections = 4; // Increased from 3 for better blending
+    const blendRadius = targetParticle.size * 4; // Increased radius for better connections
     let connections = 0;
     
     for (let i = 0; i < particles.length; i++) {
         const particle = particles[i];
         
-        // Skip the target particle itself
         if (particle === targetParticle) continue;
         
         const distance = particle.position.distanceTo(targetParticle.position);
         
-        // If particles are close enough, create a connection
         if (distance < blendRadius && connections < maxConnections) {
             createClayConnection(particle, targetParticle, distance);
             connections++;
@@ -1230,59 +1119,48 @@ function createConnectionsNearParticle(targetParticle) {
 }
 
 function createClayConnection(particle1, particle2, distance) {
-    // Calculate midpoint between particles
     const midpoint = new THREE.Vector3().addVectors(
         particle1.position, 
         particle2.position
     ).multiplyScalar(0.5);
-    
     
     const direction = new THREE.Vector3().subVectors(
         particle2.position,
         particle1.position
     ).normalize();
     
-    // Create a small cylinder/bridge between the particles
-    const length = distance * 0.8; // Slightly shorter than actual distance
-    const radius = Math.min(particle1.size, particle2.size) * 0.45;
+    // Create a more flexible connector
+    const length = distance * 0.9; // Increased from 0.8 for better connection
+    const radius = Math.min(particle1.size, particle2.size) * 0.5; // Increased from 0.45
     
-    // Create the connector geometry (cylinder)
     const geometry = new THREE.CylinderGeometry(
-        radius, // radiusTop
-        radius, // radiusBottom
-        length, // height
-        8,      // radialSegments
-        3,      // heightSegments
-        true    // openEnded
+        radius,
+        radius,
+        length,
+        12, // Increased segments for smoother appearance
+        4,  // Increased height segments for better deformation
+        true
     );
     
-    // Create the connector material - match clay appearance
     const material = new THREE.MeshPhysicalMaterial({
         color: clayColor,
         metalness: 0.1,
-        roughness: 0.55,
-        clearcoat: 0.5,
-        clearcoatRoughness: 0.25,
+        roughness: 0.5,
+        clearcoat: 0.6, // Increased for better clay-like appearance
+        clearcoatRoughness: 0.2,
         reflectivity: 0.3,
         envMapIntensity: 0.5,
         emissive: new THREE.Color(clayColor).multiplyScalar(0.05)
     });
     
-    // Create the connector mesh
-    
     const connector = new THREE.Mesh(geometry, material);
-    
-    // Position and rotate the connector
     connector.position.copy(midpoint);
     
-    // Orient cylinder along the direction between particles
     const axis = new THREE.Vector3(0, 1, 0);
     connector.quaternion.setFromUnitVectors(axis, direction);
     
-    // Add to scene
     clayMesh.add(connector);
     
-    // Store reference to connector in particles for cleanup/update later
     if (!particle1.connections) particle1.connections = [];
     if (!particle2.connections) particle2.connections = [];
     
