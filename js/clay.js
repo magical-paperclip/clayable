@@ -1,90 +1,80 @@
 import * as THREE from './three.module.js';
 
 export class ClaySculptor {
-    constructor(world) {
-        this.world = world;
-        this.ballRadius = 1.2;
-        this.color = 0xe8c291;
-        this.originalPositions = null;
+    constructor(scene) {
+        this.scene = scene;
+        this.clayBall = null;
+        this.clayGeometry = null;
+        this.clayMaterial = null;
+        this.originalVertices = null;
+        this.currentColor = 0xe8c291;
         
         this.createClayBall();
     }
     
     createClayBall() {
-        const geo = new THREE.SphereGeometry(this.ballRadius, 64, 32);
-        const mat = new THREE.MeshLambertMaterial({
-            color: this.color,
-            side: THREE.FrontSide
+        let radius = 1.2, widthSegs = 64, heightSegs = 32;
+        
+        this.clayGeometry = new THREE.SphereGeometry(radius, widthSegs, heightSegs);
+        
+        this.originalVertices = this.clayGeometry.attributes.position.array.slice();
+        
+        this.clayMaterial = new THREE.MeshPhongMaterial({
+            color: this.currentColor,
+            shininess: 30,
+            specular: 0x222222
         });
         
-        this.clayBall = new THREE.Mesh(geo, mat);
-        this.clayBall.position.set(0, 0, 0);
+        this.clayBall = new THREE.Mesh(this.clayGeometry, this.clayMaterial);
         this.clayBall.castShadow = true;
         this.clayBall.receiveShadow = true;
         
-        this.world.add(this.clayBall);
-        
-        const positions = this.clayBall.geometry.attributes.position;
-        this.originalPositions = new Float32Array(positions.array);
-        
-        return this.clayBall;
+        this.scene.add(this.clayBall);
     }
     
     setColor(newColor) {
-        this.color = newColor;
-        if (this.clayBall && this.clayBall.material) {
-            this.clayBall.material.color.setHex(newColor);
+        this.currentColor = newColor;
+        if (this.clayMaterial) {
+            this.clayMaterial.color.setHex(newColor);
         }
     }
     
-
-    
-    resetClay() {
-        const positions = this.clayBall.geometry.attributes.position;
-        for (let i = 0; i < positions.count; i++) {
-            positions.setXYZ(
-                i,
-                this.originalPositions[i * 3],
-                this.originalPositions[i * 3 + 1],
-                this.originalPositions[i * 3 + 2]
-            );
-        }
+    moldClay(x, y, z, size, depth) {
+        if (!this.clayGeometry) return;
         
-        positions.needsUpdate = true;
-        this.clayBall.geometry.computeVertexNormals();
-    }
-    
-    moldClay(x, y, z, size, strength) {
-        const moldPos = new THREE.Vector3(x, y, z);
-        
-        const positions = this.clayBall.geometry.attributes.position;
-        const originalPositions = this.originalPositions;
+        let moldPoint = new THREE.Vector3(x, y, z);
+        let positions = this.clayGeometry.attributes.position;
+        let vertex = new THREE.Vector3();
         
         for (let i = 0; i < positions.count; i++) {
-            const vertex = new THREE.Vector3(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+            vertex.fromBufferAttribute(positions, i);
             
-            const distance = vertex.distanceTo(moldPos);
-            const falloff = size;
+            let dist = vertex.distanceTo(moldPoint);
             
-            if (distance < falloff) {
-                const influence = 1 - (distance / falloff);
-                const smoothInfluence = influence * influence * (3 - 2 * influence);
+            if (dist < size) {
+                let influence = 1 - (dist / size);
+                let pushDir = vertex.clone().sub(moldPoint).normalize();
                 
-                const direction = vertex.clone().normalize();
-                const deformation = smoothInfluence * strength;
+                let pushAmt = influence * influence * depth;
+                vertex.add(pushDir.multiplyScalar(pushAmt));
                 
-                const newVertex = vertex.clone().sub(direction.multiplyScalar(deformation));
-                positions.setXYZ(i, newVertex.x, newVertex.y, newVertex.z);
+                positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
             }
         }
         
         positions.needsUpdate = true;
-        this.clayBall.geometry.computeVertexNormals();
+        this.clayGeometry.computeVertexNormals();
+    }
+    
+    resetClay() {
+        if (!this.clayGeometry || !this.originalVertices) return;
         
-        return this.clayBall;
+        let positions = this.clayGeometry.attributes.position;
+        
+        for (let i = 0; i < this.originalVertices.length; i++) 
+            positions.array[i] = this.originalVertices[i];
+        
+        positions.needsUpdate = true;
+        this.clayGeometry.computeVertexNormals();
     }
 } 

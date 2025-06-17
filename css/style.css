@@ -31,7 +31,6 @@ body {
     padding: 12px 25px;
     text-align: left;
     z-index: 1000;
-
 }
 
 .banner h1 {
@@ -42,7 +41,6 @@ body {
     text-transform: lowercase;
     color: #e8c291;
     transition: color 0.3s ease;
-
 }
 
 .banner p {
@@ -51,7 +49,6 @@ body {
     margin: 2px 0 0;
     font-weight: 300;
     text-transform: lowercase;
-
 }
 
 #canvas-container {
@@ -691,6 +688,144 @@ footer p {
     .color-btn {
         width: 34px;
         height: 34px;
+    }
+    
+    .banner {
+        padding: 8px 15px;
+    }
+    
+    .banner h1 {
+        font-size: 1.4rem;
+    }
+    
+    .banner p {
+        font-size: 0.8rem;
+    }
+    
+    .controls {
+        bottom: 20px;
+        width: calc(100vw - 40px);
+        max-width: none;
+        padding: 8px;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .controls-toggle {
+        top: -15px;
+        width: 30px;
+        height: 15px;
+        font-size: 10px;
+    }
+    
+    .color-group {
+        padding: 6px;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .color-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-width: 2px;
+    }
+    
+    .color-btn.active {
+        border-width: 3px;
+    }
+    
+    .mold-group {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        margin-top: 8px;
+    }
+    
+    button {
+        padding: 6px 12px;
+        font-size: 12px;
+        min-width: 28px;
+        height: 28px;
+    }
+    
+    #canvas-container {
+        touch-action: manipulation;
+    }
+}
+
+@media (max-width: 480px) {
+    .banner h1 {
+        font-size: 1.2rem;
+    }
+    
+    .banner p {
+        font-size: 0.75rem;
+    }
+    
+    .controls {
+        bottom: 15px;
+        width: calc(100vw - 20px);
+        padding: 6px;
+    }
+    
+    .color-btn {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+    }
+    
+    button {
+        padding: 5px 10px;
+        font-size: 11px;
+        min-width: 24px;
+        height: 24px;
+    }
+}
+
+@media (max-height: 600px) {
+    .banner {
+        padding: 6px 15px;
+    }
+    
+    .banner h1 {
+        font-size: 1.3rem;
+    }
+    
+    .banner p {
+        display: none;
+    }
+    
+    .controls {
+        bottom: 10px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .banner {
+        padding: 4px 15px;
+    }
+    
+    .banner h1 {
+        font-size: 1.1rem;
+    }
+    
+    .banner p {
+        font-size: 0.7rem;
+    }
+    
+    .controls {
+        bottom: 10px;
+        padding: 6px;
+    }
+    
+    .color-btn {
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
     }
 }
 
