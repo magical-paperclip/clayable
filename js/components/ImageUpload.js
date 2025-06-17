@@ -1,58 +1,82 @@
-export class ImageUpload {
-    constructor(container) {
-        this.container = container;
+class ImageUpload {
+    constructor() {
         this.setupUploadButton();
     }
-
+    
     setupUploadButton() {
-        // Create the upload button container
-        const uploadGroup = document.createElement('div');
-        uploadGroup.className = 'image-upload-group';
-
-        // Create the label that will act as our styled button
+        const uploadBox = document.createElement('div');
+        uploadBox.className = 'image-upload-group';
+        
         const uploadLabel = document.createElement('label');
         uploadLabel.className = 'upload-btn';
-        uploadLabel.htmlFor = 'image-upload';
-        uploadLabel.title = 'Upload Image (I)';
-        uploadLabel.textContent = 'Upload';
-
-        // Create the hidden file input
+        uploadLabel.textContent = 'Drop Image Here!';
+        uploadLabel.title = 'Upload a cool image to sculpt with';
+        
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.id = 'image-upload';
         fileInput.accept = 'image/*';
         fileInput.style.display = 'none';
-
-        // Add event listener for file selection
+        
+        uploadLabel.appendChild(fileInput);
+        uploadBox.appendChild(uploadLabel);
+        document.querySelector('.controls').appendChild(uploadBox);
+        
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) {
-                // Validate file type
-                if (!file.type.startsWith('image/')) {
-                    alert('Please select an image file');
-                    return;
-                }
-
-                // Validate file size (max 5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    alert('File size must be less than 5MB');
-                    return;
-                }
-
-                // Dispatch a custom event that the main application can listen for
-                const event = new CustomEvent('imageUploaded', {
-                    detail: { file }
-                });
-                document.dispatchEvent(event);
-
-                // Reset the input to allow selecting the same file again
-                fileInput.value = '';
+            if (this.checkFile(file)) {
+                this.processImage(file);
             }
         });
-
-        // Add elements to the DOM
-        uploadGroup.appendChild(uploadLabel);
-        uploadGroup.appendChild(fileInput);
-        this.container.appendChild(uploadGroup);
+        
+        uploadLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadLabel.style.transform = 'scale(1.1)';
+        });
+        
+        uploadLabel.addEventListener('dragleave', () => {
+            uploadLabel.style.transform = 'scale(1)';
+        });
+        
+        uploadLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadLabel.style.transform = 'scale(1)';
+            const file = e.dataTransfer.files[0];
+            if (this.checkFile(file)) {
+                this.processImage(file);
+            }
+        });
     }
-} 
+    
+    checkFile(file) {
+        if (!file) return false;
+        
+        if (!file.type.startsWith('image/')) {
+            alert('Hey! That\'s not an image. Try something with .jpg, .png, or .gif!');
+            return false;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Woah there! That image is huge. Keep it under 5MB for smooth sculpting!');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    processImage(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const event = new CustomEvent('imageUploaded', {
+                    detail: { image: img }
+                });
+                document.dispatchEvent(event);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+export { ImageUpload }; 
