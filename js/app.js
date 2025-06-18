@@ -2,16 +2,16 @@ import * as THREE from './three.module.js';
 import { ClaySculptor } from './clay.js';
 import { OrbitControls } from './OrbitControls.js';
 
-let canvas, camera, scene, renderer, controls;
+let canvas, cam, scene, renderer, controls;
 let mousePos = new THREE.Vector2();
-let isDragging = false, lastMousePos = new THREE.Vector2();
+let dragging = false, lastMouse = new THREE.Vector2();
 let clock = new THREE.Clock();
 
-let shouldSpin = false, spinSpeed = 0.001;
-let fog = true, shadows = true, mouseFollow = true;
+let spin = false, spinSpd = 0.001;
+let fog = true, shadows = true, follow = true;
 let useTex = true, texScale = 0.3, texStr = 0.1;
 let clayColor = 0xe8c291;
-let clayColors = {
+let colors = {
     'Classic Clay': 0xe8c291,
     'Blue Clay': 0x4a87b3,
     'Red Clay': 0xc45c5c,
@@ -20,10 +20,10 @@ let clayColors = {
     'Gray Clay': 0x808080
 };
 let moldStr = 0.02, touchStr = 0.035;
-let currentTool = 'push';
-let brushSize = 0.3;
+let tool = 'push';
+let size = 0.3;
 
-let clayMaker;
+let clay;
 let port = 3001; 
 
 init();
@@ -36,9 +36,9 @@ function init() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a1a);
         
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0, 5);
-        camera.lookAt(0, 0, 0);
+        cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        cam.position.set(0, 0, 5);
+        cam.lookAt(0, 0, 0);
         
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -46,304 +46,348 @@ function init() {
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         canvas.appendChild(renderer.domElement);
         
-        let ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
+        let light1 = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(light1);
         
-        let directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 10, 5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        scene.add(directionalLight);
+        let light2 = new THREE.DirectionalLight(0xffffff, 0.8);
+        light2.position.set(10, 10, 5);
+        light2.castShadow = true;
+        light2.shadow.mapSize.width = 2048;
+        light2.shadow.mapSize.height = 2048;
+        scene.add(light2);
         
-        let fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        fillLight.position.set(-5, 0, 5);
-        scene.add(fillLight);
+        let light3 = new THREE.DirectionalLight(0xffffff, 0.3);
+        light3.position.set(-5, 0, 5);
+        scene.add(light3);
         
-        clayMaker = new ClaySculptor(scene);
-        clayMaker.setColor(clayColor);
+        clay = new ClaySculptor(scene);
+        clay.setColor(clayColor);
         
         setupControls();
-        setupEventListeners();
-        window.onkeydown = keyPress;
-        createUI();
+        setupEvents();
+        window.onkeydown = onKey;
+        makeUI();
         animate();
     } catch (e) {
-        // ignore
+        console.log('init failed');
     }
 }
 
-function createUI() {
-    let controls = document.querySelector('.controls');
-    if (!controls) return;
+function makeUI() {
+    let ctrl = document.querySelector('.controls');
+    if (!ctrl) return;
     
     let toggle = document.createElement('div');
     toggle.className = 'controls-toggle';
     toggle.textContent = '▼';
-    controls.appendChild(toggle);
+    ctrl.appendChild(toggle);
     
     toggle.onclick = () => {
-        controls.classList.toggle('collapsed');
-        toggle.textContent = controls.classList.contains('collapsed') ? '▲' : '▼';
+        ctrl.classList.toggle('collapsed');
+        toggle.textContent = ctrl.classList.contains('collapsed') ? '▲' : '▼';
     };
 
-    let group = document.createElement('div');
-    group.className = 'mold-group';
-    
-    let btn = document.createElement('button');
-    btn.textContent = 'reset clay';
-    btn.onclick = () => {
-        btn.style.transform = 'scale(0.95)';
-        setTimeout(() => btn.style.transform = '', 100);
-        resetClay();
+    let resetBtn = document.createElement('button');
+    resetBtn.textContent = 'reset clay';
+    resetBtn.onclick = () => {
+        resetBtn.style.transform = 'scale(0.95)';
+        setTimeout(() => resetBtn.style.transform = '', 100);
+        reset();
     };
-    group.appendChild(btn);
     
-    let topRow = document.createElement('div');
-    topRow.className = 'control-row';
+    let toolRow = document.createElement('div');
+    toolRow.className = 'control-row';
     
-    let toolGroup = document.createElement('div');
-    toolGroup.className = 'tool-group';
+    let toolGrp = document.createElement('div');
+    toolGrp.className = 'tool-group';
     
     let tools = ['push', 'pull', 'smooth', 'pinch', 'inflate'];
-    for(let i = 0; i < tools.length; i++) {
-        let tool = tools[i];
+    tools.forEach(t => {
         let btn = document.createElement('button');
-        btn.textContent = tool;
+        btn.textContent = t;
         btn.className = 'tool-btn';
-        btn.dataset.tool = tool;
-        if (tool === currentTool) btn.classList.add('active');
+        btn.dataset.tool = t;
+        if (t === tool) btn.classList.add('active');
         
         btn.onclick = () => {
-            currentTool = tool;
-            clayMaker.setTool(tool);
+            tool = t;
+            clay.setTool(t);
             
-            let allBtns = document.querySelectorAll('.tool-btn');
-            for(let j = 0; j < allBtns.length; j++) {
-                allBtns[j].classList.remove('active');
-            }
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             
             btn.style.transform = 'scale(0.95)';
             setTimeout(() => btn.style.transform = '', 100);
         };
         
-        toolGroup.appendChild(btn);
-    }
+        toolGrp.appendChild(btn);
+    });
     
-    topRow.appendChild(toolGroup);
+    let sizeBox = document.createElement('div');
+    sizeBox.className = 'size-group';
     
-    let sizeGroup = document.createElement('div');
-    sizeGroup.className = 'size-group';
+    let sizeLbl = document.createElement('span');
+    sizeLbl.textContent = 'size';
+    sizeLbl.className = 'size-label';
     
-    let sizeLabel = document.createElement('span');
-    sizeLabel.textContent = 'size';
-    sizeLabel.className = 'size-label';
+    let slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0.1';
+    slider.max = '0.8';
+    slider.step = '0.05';
+    slider.value = size;
+    slider.className = 'size-slider';
     
-    let sizeSlider = document.createElement('input');
-    sizeSlider.type = 'range';
-    sizeSlider.min = '0.1';
-    sizeSlider.max = '0.8';
-    sizeSlider.step = '0.05';
-    sizeSlider.value = brushSize;
-    sizeSlider.className = 'size-slider';
-    
-    sizeSlider.oninput = (e) => {
-        brushSize = parseFloat(e.target.value);
-        clayMaker.setBrushSize(brushSize);
+    slider.oninput = (e) => {
+        size = parseFloat(e.target.value);
+        clay.setBrushSize(size);
     };
     
-    sizeGroup.appendChild(sizeLabel);
-    sizeGroup.appendChild(sizeSlider);
-    topRow.appendChild(sizeGroup);
+    sizeBox.appendChild(sizeLbl);
+    sizeBox.appendChild(slider);
     
-    controls.appendChild(topRow);
+    toolRow.appendChild(toolGrp);
+    toolRow.appendChild(sizeBox);
     
     let bottomRow = document.createElement('div');
     bottomRow.className = 'control-row';
-    bottomRow.appendChild(group);
-    controls.appendChild(bottomRow);
     
-    setupColorButtons();
+    let moldGrp = document.createElement('div');
+    moldGrp.className = 'mold-group';
+    moldGrp.appendChild(resetBtn);
+    
+    bottomRow.appendChild(moldGrp);
+    
+    ctrl.appendChild(toolRow);
+    ctrl.appendChild(bottomRow);
+    
+    setupColors();
+    setupTutorial();
 }
 
-function setupColorButtons() {
+function setupTutorial() {
+    let tutBtn = document.getElementById('tutorial-btn');
+    if (tutBtn) {
+        tutBtn.onclick = () => {
+            tutBtn.style.transform = 'scale(0.95)';
+            setTimeout(() => tutBtn.style.transform = '', 100);
+            showTutorial();
+        };
+    }
+}
+
+function setupColors() {
     let btns = document.querySelectorAll('.color-btn');
-    for(let i = 0; i < btns.length; i++) {
-        let btn = btns[i];
+    btns.forEach(btn => {
         btn.onclick = () => {
             let name = btn.dataset.color;
-            let val = clayColors[name];
-            if (val !== undefined) {
-                btn.style.transform = 'scale(0.9)';
-                setTimeout(() => btn.style.transform = '', 150);
-                
-                setClayColor(name, val);
-                
-                for(let j = 0; j < btns.length; j++) {
-                    btns[j].classList.remove('active');
-                }
-                btn.classList.add('active');
-            }
+            let val = colors[name];
+            if (!val) return;
+            
+            btn.style.transform = 'scale(0.9)';
+            setTimeout(() => btn.style.transform = '', 150);
+            
+            changeColor(name, val);
+            
+            btns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
         };
         
         btn.onmouseenter = () => {
-            if (!btn.classList.contains('active')) btn.style.transform = 'scale(1.05)';
+            if (!btn.classList.contains('active')) {
+                btn.style.transform = 'scale(1.05)';
+            }
         };
         btn.onmouseleave = () => {
-            if (!btn.classList.contains('active')) btn.style.transform = '';
+            if (!btn.classList.contains('active')) {
+                btn.style.transform = '';
+            }
         };
-    }
+    });
     
     let def = document.querySelector('.color-btn[data-color="Classic Clay"]');
     if (def) def.classList.add('active');
 }
 
-function setClayColor(name, val) {
+function changeColor(name, val) {
     clayColor = val;
-    if (clayMaker && clayMaker.ball) clayMaker.setColor(val);
+    if (clay && clay.ball) clay.setColor(val);
     
-    let banner = document.querySelector('.banner h1');
-    if (banner) {
-        banner.style.color = '#' + val.toString(16);
-        banner.style.transform = 'scale(1.02)';
-        setTimeout(() => banner.style.transform = '', 200);
+    let title = document.querySelector('.banner h1');
+    if (title) {
+        title.style.color = '#' + val.toString(16);
+        title.style.transform = 'scale(1.02)';
+        setTimeout(() => title.style.transform = '', 200);
     }
 }
 
-function keyPress(e) {
-    if(e.key.toLowerCase() === 'r') resetClay();
+function onKey(e) {
+    if (e.key.toLowerCase() === 'r') reset();
+    if (e.key === ' ') {
+        e.preventDefault();
+        spin = !spin;
+    }
     
     let toolKeys = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
     if (toolKeys[e.key]) {
-        currentTool = toolKeys[e.key];
-        clayMaker.setTool(currentTool);
+        tool = toolKeys[e.key];
+        clay.setTool(tool);
         
-        let toolBtns = document.querySelectorAll('.tool-btn');
-        for(let i = 0; i < toolBtns.length; i++) {
-            toolBtns[i].classList.remove('active');
-            if (toolBtns[i].dataset.tool === currentTool) {
-                toolBtns[i].classList.add('active');
+        let btns = document.querySelectorAll('.tool-btn');
+        btns.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.tool === tool) {
+                btn.classList.add('active');
             }
-        }
+        });
     }
     
     if (e.key === '[') {
-        brushSize = Math.max(0.1, brushSize - 0.05);
-        clayMaker.setBrushSize(brushSize);
-        let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = brushSize;
+        size = Math.max(0.1, size - 0.05);
+        clay.setBrushSize(size);
+        let s = document.querySelector('.size-slider');
+        if (s) s.value = size;
     }
     if (e.key === ']') {
-        brushSize = Math.min(0.8, brushSize + 0.05);
-        clayMaker.setBrushSize(brushSize);
-        let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = brushSize;
+        size = Math.min(0.8, size + 0.05);
+        clay.setBrushSize(size);
+        let s = document.querySelector('.size-slider');
+        if (s) s.value = size;
     }
 }
 
-function resetClay() {
-    if (clayMaker) clayMaker.resetClay();
+function reset() {
+    if (clay) clay.resetClay();
+}
+
+function showTutorial() {
+    alert(`🎨 clayable tutorial
+
+basic controls:
+• drag your mouse or finger to sculpt
+• use mouse wheel or two fingers to zoom
+• right-click and drag to rotate view
+
+tools (keys 1-5):
+• push (1) - push clay inward
+• pull (2) - pull clay outward  
+• smooth (3) - smooth rough areas
+• pinch (4) - create sharp details
+• inflate (5) - expand clay volume
+
+size controls:
+• [ ] keys to change brush size
+• or use the size slider
+
+color selection:
+• click color buttons to change clay color
+• title color changes to match your selection
+
+other keys:
+• r - reset clay to original sphere
+• space - auto-rotate clay ball
+
+tips:
+• start with large brush for basic shapes
+• use smaller brush for fine details
+• smooth tool helps blend areas together
+• try different colors to see your work better!`);
 }
 
 function showHelp() {
     alert(`
-Clay Sculptor Controls:
-- Click and drag to sculpt
-- [1-5] Change tools
-- [R] Reset clay
-- [ ] Decrease brush size
-- [ ] Increase brush size
-- Mouse: Sculpt the clay
+Clay thing:
+- drag to sculpt
+- 1-5 for tools  
+- R to reset
+- [ ] for size
+- mouse does stuff
     `);
 }
 
 function resize() {
-    if (camera && renderer) {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
+    if (cam && renderer) {
+        cam.aspect = window.innerWidth / window.innerHeight;
+        cam.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     }
 }
 
-function mouseMove(e) {
+function onMouseMove(e) {
     mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
     mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
-    if (isDragging) {
-        moldClay();
-    }
+    if (dragging) sculpt();
 }
 
-function mouseDown(e) {
-    isDragging = true;
-    lastMousePos.set(e.clientX, e.clientY);
-    moldClay();
+function onMouseDown(e) {
+    dragging = true;
+    lastMouse.set(e.clientX, e.clientY);
+    sculpt();
 }
 
-function mouseUp(e) {
-    isDragging = false;
+function onMouseUp(e) {
+    dragging = false;
     if (controls) controls.enabled = true;
 }
 
-function touchStart(e) {
+function onTouchStart(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
         let touch = e.touches[0];
         mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        isDragging = true;
-        lastMousePos.set(touch.clientX, touch.clientY);
+        dragging = true;
+        lastMouse.set(touch.clientX, touch.clientY);
         
         if (controls) controls.enabled = false;
-        
-        moldClay(true);
+        sculpt(true);
     } else if (e.touches.length === 2) {
         if (controls) controls.enabled = true;
-        isDragging = false;
+        dragging = false;
     }
 }
 
-function touchMove(e) {
+function onTouchMove(e) {
     e.preventDefault();
-    if (e.touches.length === 1 && isDragging) {
+    if (e.touches.length === 1 && dragging) {
         let touch = e.touches[0];
         mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        let deltaX = touch.clientX - lastMousePos.x;
-        let deltaY = touch.clientY - lastMousePos.y;
-        let delta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        let dx = touch.clientX - lastMouse.x;
+        let dy = touch.clientY - lastMouse.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (delta > 5) {
-            moldClay(true);
-            lastMousePos.set(touch.clientX, touch.clientY);
+        if (dist > 5) {
+            sculpt(true);
+            lastMouse.set(touch.clientX, touch.clientY);
         }
     }
 }
 
-function touchEnd(e) {
+function onTouchEnd(e) {
     e.preventDefault();
-    isDragging = false;
+    dragging = false;
     if (controls) controls.enabled = true;
 }
 
-function moldClay(isTouch = false) {
-    if (!clayMaker || !clayMaker.ball) return;
+function sculpt(touch = false) {
+    if (!clay || !clay.ball) return;
     
-    let raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mousePos, camera);
+    let ray = new THREE.Raycaster();
+    ray.setFromCamera(mousePos, cam);
     
-    let intersects = raycaster.intersectObject(clayMaker.ball);
-    if (intersects.length > 0) {
-        let point = intersects[0].point;
+    let hits = ray.intersectObject(clay.ball);
+    if (hits.length > 0) {
+        let pt = hits[0].point;
         
         if (controls) controls.enabled = false;
         
-        let str = isTouch ? touchStr : moldStr;
-        clayMaker.setStrength(str);
-        clayMaker.moldClay(point.x, point.y, point.z, isTouch);
+        let str = touch ? touchStr : moldStr;
+        clay.setStrength(str);
+        clay.moldClay(pt.x, pt.y, pt.z, touch);
     }
 }
 
@@ -352,33 +396,33 @@ function animate() {
     
     if (controls) controls.update();
     
-    if (shouldSpin && clayMaker && clayMaker.ball) {
-        clayMaker.ball.rotation.y += spinSpeed;
+    if (spin && clay && clay.ball) {
+        clay.ball.rotation.y += spinSpd;
     }
     
-    renderer.render(scene, camera);
+    renderer.render(scene, cam);
 }
 
 function setupControls() {
     if (!canvas) return;
     
-    controls = new OrbitControls(camera, canvas.querySelector('canvas'));
+    controls = new OrbitControls(cam, canvas.querySelector('canvas'));
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.enableZoom = true;
     controls.enablePan = false;
 }
 
-function setupEventListeners() {
+function setupEvents() {
     window.addEventListener('resize', resize);
     
     let canvasEl = canvas.querySelector('canvas');
     if (canvasEl) {
-        canvasEl.addEventListener('mousemove', mouseMove);
-        canvasEl.addEventListener('mousedown', mouseDown);
-        canvasEl.addEventListener('mouseup', mouseUp);
-        canvasEl.addEventListener('touchstart', touchStart, { passive: false });
-        canvasEl.addEventListener('touchmove', touchMove, { passive: false });
-        canvasEl.addEventListener('touchend', touchEnd, { passive: false });
+        canvasEl.addEventListener('mousemove', onMouseMove);
+        canvasEl.addEventListener('mousedown', onMouseDown);
+        canvasEl.addEventListener('mouseup', onMouseUp);
+        canvasEl.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvasEl.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvasEl.addEventListener('touchend', onTouchEnd, { passive: false });
     }
 }

@@ -9,19 +9,17 @@ export class ClaySculptor {
         this.origVerts = null;
         this.color = 0xe8c291;
         
-        // tools
         this.tool = 'push';
-        this.brushSize = 0.3;
-        this.strength = 0.02;
+        this.size = 0.3;
+        this.str = 0.02;
         
-        this.createClayBall();
+        this.make();
     }
     
-    createClayBall() {
+    make() {
         let r = 1.2, w = 80, h = 40;
         
         this.geo = new THREE.SphereGeometry(r, w, h);
-        
         this.origVerts = this.geo.attributes.position.array.slice();
         
         this.mat = new THREE.MeshPhongMaterial({
@@ -42,19 +40,20 @@ export class ClaySculptor {
         if (this.mat) this.mat.color.setHex(c);
     }
     
-    setTool(tool) {
-        this.tool = tool;
+    setTool(t) {
+        this.tool = t;
     }
     
-    setBrushSize(size) {
-        this.brushSize = size;
+    setBrushSize(s) {
+        this.size = s;
     }
     
-    setStrength(str) {
-        this.strength = str;
+    setStrength(s) {
+        this.str = s;
     }
-    
-    moldClay(x, y, z, isTouch = false) {
+
+    // sculpting system - handles all deformation tools
+    moldClay(x, y, z, touch = false) {
         if (!this.geo) return;
         
         let pt = new THREE.Vector3(x, y, z);
@@ -62,31 +61,31 @@ export class ClaySculptor {
         let v = new THREE.Vector3();
         
         if (this.tool === 'push') {
-            this.pushTool(pt, pos, v);
+            this.push(pt, pos, v);
         } else if (this.tool === 'pull') {
-            this.pullTool(pt, pos, v);
+            this.pull(pt, pos, v);
         } else if (this.tool === 'smooth') {
-            this.smoothTool(pt, pos, v);
+            this.smooth(pt, pos, v);
         } else if (this.tool === 'pinch') {
-            this.pinchTool(pt, pos, v);
+            this.pinch(pt, pos, v);
         } else if (this.tool === 'inflate') {
-            this.inflateTool(pt, pos, v);
+            this.inflate(pt, pos, v);
         }
         
         pos.needsUpdate = true;
         this.geo.computeVertexNormals();
     }
     
-    pushTool(pt, pos, v) {
+    push(pt, pos, v) {
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
-            if (d < this.brushSize) {
-                let inf = 1 - (d / this.brushSize);
+            if (d < this.size) {
+                let inf = 1 - (d / this.size);
                 let dir = v.clone().sub(pt).normalize();
                 
-                let amt = inf * inf * this.strength;
+                let amt = inf * inf * this.str;
                 v.add(dir.multiplyScalar(amt));
                 
                 pos.setXYZ(i, v.x, v.y, v.z);
@@ -94,16 +93,16 @@ export class ClaySculptor {
         }
     }
     
-    pullTool(pt, pos, v) {
+    pull(pt, pos, v) {
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
-            if (d < this.brushSize) {
-                let inf = 1 - (d / this.brushSize);
+            if (d < this.size) {
+                let inf = 1 - (d / this.size);
                 let dir = pt.clone().sub(v).normalize();
                 
-                let amt = inf * inf * this.strength * 0.8;
+                let amt = inf * inf * this.str * 0.8;
                 v.add(dir.multiplyScalar(amt));
                 
                 pos.setXYZ(i, v.x, v.y, v.z);
@@ -111,50 +110,48 @@ export class ClaySculptor {
         }
     }
     
-    smoothTool(pt, pos, v) {
-        let avgPos = new THREE.Vector3();
+    smooth(pt, pos, v) {
+        let avg = new THREE.Vector3();
         let count = 0;
         
-        // calc avg position
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
-            if (d < this.brushSize) {
-                avgPos.add(v);
+            if (d < this.size) {
+                avg.add(v);
                 count++;
             }
         }
         
         if (count > 0) {
-            avgPos.divideScalar(count);
+            avg.divideScalar(count);
             
-            // blend to avg
             for (let i = 0; i < pos.count; i++) {
                 v.fromBufferAttribute(pos, i);
                 let d = v.distanceTo(pt);
                 
-                if (d < this.brushSize) {
-                    let inf = 1 - (d / this.brushSize);
-                    let blend = inf * this.strength * 2;
+                if (d < this.size) {
+                    let inf = 1 - (d / this.size);
+                    let blend = inf * this.str * 2;
                     
-                    v.lerp(avgPos, Math.min(blend, 0.5));
+                    v.lerp(avg, Math.min(blend, 0.5));
                     pos.setXYZ(i, v.x, v.y, v.z);
                 }
             }
         }
     }
     
-    pinchTool(pt, pos, v) {
+    pinch(pt, pos, v) {
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
-            if (d < this.brushSize) {
-                let inf = 1 - (d / this.brushSize);
+            if (d < this.size) {
+                let inf = 1 - (d / this.size);
                 let dir = pt.clone().sub(v).normalize();
                 
-                let amt = inf * inf * inf * this.strength * 1.5;
+                let amt = inf * inf * inf * this.str * 1.5;
                 v.add(dir.multiplyScalar(amt));
                 
                 pos.setXYZ(i, v.x, v.y, v.z);
@@ -162,18 +159,18 @@ export class ClaySculptor {
         }
     }
     
-    inflateTool(pt, pos, v) {
+    inflate(pt, pos, v) {
         let center = new THREE.Vector3(0, 0, 0);
         
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
-            if (d < this.brushSize) {
-                let inf = 1 - (d / this.brushSize);
+            if (d < this.size) {
+                let inf = 1 - (d / this.size);
                 let dir = v.clone().sub(center).normalize();
                 
-                let amt = inf * inf * this.strength * 0.6;
+                let amt = inf * inf * this.str * 0.6;
                 v.add(dir.multiplyScalar(amt));
                 
                 pos.setXYZ(i, v.x, v.y, v.z);

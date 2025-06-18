@@ -1,22 +1,22 @@
 export class ImageUpload {
     constructor(id) {
-        this.container = document.getElementById(id);
+        this.cont = document.getElementById(id);
         this.input = null;
         this.preview = null;
         this.btn = null;
         this.img = null;
         
-        this.init();
+        this.setup();
     }
     
-    init() {
-        this.createUI();
-        this.setupEvents();
+    setup() {
+        this.makeUI();
+        this.addEvents();
     }
     
-    createUI() {
-        let wrapper = document.createElement('div');
-        wrapper.className = 'upload-wrapper';
+    makeUI() {
+        let wrap = document.createElement('div');
+        wrap.className = 'upload-wrapper';
         
         this.input = document.createElement('input');
         this.input.type = 'file';
@@ -31,19 +31,19 @@ export class ImageUpload {
         this.preview.className = 'preview-img';
         this.preview.style.display = 'none';
         
-        wrapper.appendChild(this.input);
-        wrapper.appendChild(this.btn);
-        wrapper.appendChild(this.preview);
+        wrap.appendChild(this.input);
+        wrap.appendChild(this.btn);
+        wrap.appendChild(this.preview);
         
-        this.container.appendChild(wrapper);
+        this.cont.appendChild(wrap);
     }
     
-    setupEvents() {
+    addEvents() {
         this.btn.onclick = () => this.input.click();
-        this.input.onchange = (e) => this.handleFile(e);
+        this.input.onchange = (e) => this.handle(e);
     }
     
-    handleFile(e) {
+    handle(e) {
         let file = e.target.files[0];
         if (!file) return;
         
@@ -53,11 +53,11 @@ export class ImageUpload {
         }
         
         let reader = new FileReader();
-        reader.onload = (e) => this.showPreview(e.target.result);
+        reader.onload = (e) => this.show(e.target.result);
         reader.readAsDataURL(file);
     }
     
-    showPreview(src) {
+    show(src) {
         this.preview.src = src;
         this.preview.style.display = 'block';
         this.img = src;
