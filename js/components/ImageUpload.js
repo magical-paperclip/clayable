@@ -1,55 +1,50 @@
 export class ImageUpload {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.fileInput = null;
-        this.previewImg = null;
-        this.uploadBtn = null;
-        this.currentImg = null;
+    constructor(id) {
+        this.container = document.getElementById(id);
+        this.input = null;
+        this.preview = null;
+        this.btn = null;
+        this.img = null;
         
         this.init();
     }
     
     init() {
-        this.createUploadInterface();
-        this.setupEventHandlers();
+        this.createUI();
+        this.setupEvents();
     }
     
-    createUploadInterface() {
-        const wrapper = document.createElement('div');
+    createUI() {
+        let wrapper = document.createElement('div');
         wrapper.className = 'upload-wrapper';
         
-        this.fileInput = document.createElement('input');
-        this.fileInput.type = 'file';
-        this.fileInput.accept = 'image/*';
-        this.fileInput.style.display = 'none';
+        this.input = document.createElement('input');
+        this.input.type = 'file';
+        this.input.accept = 'image/*';
+        this.input.style.display = 'none';
         
-        this.uploadBtn = document.createElement('button');
-        this.uploadBtn.textContent = 'Upload Image';
-        this.uploadBtn.className = 'upload-btn';
+        this.btn = document.createElement('button');
+        this.btn.textContent = 'Upload Image';
+        this.btn.className = 'upload-btn';
         
-        this.previewImg = document.createElement('img');
-        this.previewImg.className = 'preview-img';
-        this.previewImg.style.display = 'none';
+        this.preview = document.createElement('img');
+        this.preview.className = 'preview-img';
+        this.preview.style.display = 'none';
         
-        wrapper.appendChild(this.fileInput);
-        wrapper.appendChild(this.uploadBtn);
-        wrapper.appendChild(this.previewImg);
+        wrapper.appendChild(this.input);
+        wrapper.appendChild(this.btn);
+        wrapper.appendChild(this.preview);
         
         this.container.appendChild(wrapper);
     }
     
-    setupEventHandlers() {
-        this.uploadBtn.onclick = () => {
-            this.fileInput.click();
-        };
-        
-        this.fileInput.onchange = (e) => {
-            this.handleFileSelect(e);
-        };
+    setupEvents() {
+        this.btn.onclick = () => this.input.click();
+        this.input.onchange = (e) => this.handleFile(e);
     }
     
-    handleFileSelect(event) {
-        const file = event.target.files[0];
+    handleFile(e) {
+        let file = e.target.files[0];
         if (!file) return;
         
         if (!file.type.startsWith('image/')) {
@@ -57,30 +52,28 @@ export class ImageUpload {
             return;
         }
         
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            this.displayPreview(e.target.result);
-        };
+        let reader = new FileReader();
+        reader.onload = (e) => this.showPreview(e.target.result);
         reader.readAsDataURL(file);
     }
     
-    displayPreview(imgSrc) {
-        this.previewImg.src = imgSrc;
-        this.previewImg.style.display = 'block';
-        this.currentImg = imgSrc;
+    showPreview(src) {
+        this.preview.src = src;
+        this.preview.style.display = 'block';
+        this.img = src;
         
-        this.uploadBtn.textContent = 'Change Image';
+        this.btn.textContent = 'Change Image';
     }
     
-    getImageData() {
-        return this.currentImg;
+    getData() {
+        return this.img;
     }
     
-    clearImage() {
-        this.previewImg.style.display = 'none';
-        this.previewImg.src = '';
-        this.currentImg = null;
-        this.uploadBtn.textContent = 'Upload Image';
-        this.fileInput.value = '';
+    clear() {
+        this.preview.style.display = 'none';
+        this.preview.src = '';
+        this.img = null;
+        this.btn.textContent = 'Upload Image';
+        this.input.value = '';
     }
 } 

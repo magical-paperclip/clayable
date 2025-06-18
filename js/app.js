@@ -1,26 +1,16 @@
 import * as THREE from './three.module.js';
 import { ClaySculptor } from './clay.js';
-
 import { OrbitControls } from './OrbitControls.js';
 
-let canvas;
-let camera, scene, renderer;
-let controls;
+let canvas, camera, scene, renderer, controls;
 let mousePos = new THREE.Vector2();
-let isDragging = false;
-let lastMousePos = new THREE.Vector2();
+let isDragging = false, lastMousePos = new THREE.Vector2();
 let clock = new THREE.Clock();
 
-let shouldSpin = false;
-let spinningSpeed = 0.001;
-let fogEnabled = true;
-let shadowsEnabled = true;
-let mouseFollow = true;
-
-let useTexture = true;
-let texScale = 0.3;
-let texStrength = 0.1;
-let currentClayColor = 0xe8c291;
+let shouldSpin = false, spinSpeed = 0.001;
+let fog = true, shadows = true, mouseFollow = true;
+let useTex = true, texScale = 0.3, texStr = 0.1;
+let clayColor = 0xe8c291;
 let clayColors = {
     'Classic Clay': 0xe8c291,
     'Blue Clay': 0x4a87b3,
@@ -29,25 +19,19 @@ let clayColors = {
     'Purple Clay': 0x9370db,
     'Gray Clay': 0x808080
 };
-let moldPower = 0.02;
-let touchMoldPower = 0.035;
+let moldStr = 0.02, touchStr = 0.035;
+let currentTool = 'push';
+let brushSize = 0.3;
 
 let clayMaker;
-
-let serverPort = 3001; 
-
-
-
-
+let port = 3001; 
 
 init();
 
 function init() {
     try {
         canvas = document.getElementById('canvas-container');
-        if (!canvas) {
-            return;
-        }
+        if (!canvas) return;
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a1a);
@@ -77,211 +61,289 @@ function init() {
         scene.add(fillLight);
         
         clayMaker = new ClaySculptor(scene);
-        clayMaker.setColor(currentClayColor);
+        clayMaker.setColor(clayColor);
         
         setupControls();
         setupEventListeners();
-        window.addEventListener('keydown', handleKeyPress);
+        window.onkeydown = keyPress;
         createUI();
         animate();
-    } catch (error) {
-        
+    } catch (e) {
+        // ignore
     }
 }
 
 function createUI() {
-    const controlsDiv = document.querySelector('.controls');
-    if (!controlsDiv) {
-        return;
-    }
+    let controls = document.querySelector('.controls');
+    if (!controls) return;
     
     let toggle = document.createElement('div');
     toggle.className = 'controls-toggle';
     toggle.textContent = '▼';
-    controlsDiv.appendChild(toggle);
+    controls.appendChild(toggle);
     
-    toggle.addEventListener('click', () => {
-        controlsDiv.classList.toggle('collapsed');
-        toggle.textContent = controlsDiv.classList.contains('collapsed') ? '▲' : '▼';
-    });
+    toggle.onclick = () => {
+        controls.classList.toggle('collapsed');
+        toggle.textContent = controls.classList.contains('collapsed') ? '▲' : '▼';
+    };
 
-    let moldGroup = document.createElement('div');
-    moldGroup.className = 'mold-group';
+    let group = document.createElement('div');
+    group.className = 'mold-group';
     
-    let resetBtn = document.createElement('button');
-    resetBtn.textContent = 'Reset Clay Ball';
-    resetBtn.onclick = resetClay;
-    moldGroup.appendChild(resetBtn);
+    let btn = document.createElement('button');
+    btn.textContent = 'reset clay';
+    btn.onclick = () => {
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => btn.style.transform = '', 100);
+        resetClay();
+    };
+    group.appendChild(btn);
     
-    controlsDiv.appendChild(moldGroup);
+    let topRow = document.createElement('div');
+    topRow.className = 'control-row';
+    
+    let toolGroup = document.createElement('div');
+    toolGroup.className = 'tool-group';
+    
+    let tools = ['push', 'pull', 'smooth', 'pinch', 'inflate'];
+    for(let i = 0; i < tools.length; i++) {
+        let tool = tools[i];
+        let btn = document.createElement('button');
+        btn.textContent = tool;
+        btn.className = 'tool-btn';
+        btn.dataset.tool = tool;
+        if (tool === currentTool) btn.classList.add('active');
+        
+        btn.onclick = () => {
+            currentTool = tool;
+            clayMaker.setTool(tool);
+            
+            let allBtns = document.querySelectorAll('.tool-btn');
+            for(let j = 0; j < allBtns.length; j++) {
+                allBtns[j].classList.remove('active');
+            }
+            btn.classList.add('active');
+            
+            btn.style.transform = 'scale(0.95)';
+            setTimeout(() => btn.style.transform = '', 100);
+        };
+        
+        toolGroup.appendChild(btn);
+    }
+    
+    topRow.appendChild(toolGroup);
+    
+    let sizeGroup = document.createElement('div');
+    sizeGroup.className = 'size-group';
+    
+    let sizeLabel = document.createElement('span');
+    sizeLabel.textContent = 'size';
+    sizeLabel.className = 'size-label';
+    
+    let sizeSlider = document.createElement('input');
+    sizeSlider.type = 'range';
+    sizeSlider.min = '0.1';
+    sizeSlider.max = '0.8';
+    sizeSlider.step = '0.05';
+    sizeSlider.value = brushSize;
+    sizeSlider.className = 'size-slider';
+    
+    sizeSlider.oninput = (e) => {
+        brushSize = parseFloat(e.target.value);
+        clayMaker.setBrushSize(brushSize);
+    };
+    
+    sizeGroup.appendChild(sizeLabel);
+    sizeGroup.appendChild(sizeSlider);
+    topRow.appendChild(sizeGroup);
+    
+    controls.appendChild(topRow);
+    
+    let bottomRow = document.createElement('div');
+    bottomRow.className = 'control-row';
+    bottomRow.appendChild(group);
+    controls.appendChild(bottomRow);
     
     setupColorButtons();
 }
 
 function setupColorButtons() {
-    let colorBtns = document.querySelectorAll('.color-btn');
-    for(let i = 0; i < colorBtns.length; i++) {
-        let btn = colorBtns[i];
-        btn.addEventListener('click', () => {
-            let colorName = btn.dataset.color;
-            let colorVal = clayColors[colorName];
-            if (colorVal !== undefined) {
-                setClayColor(colorName, colorVal);
+    let btns = document.querySelectorAll('.color-btn');
+    for(let i = 0; i < btns.length; i++) {
+        let btn = btns[i];
+        btn.onclick = () => {
+            let name = btn.dataset.color;
+            let val = clayColors[name];
+            if (val !== undefined) {
+                btn.style.transform = 'scale(0.9)';
+                setTimeout(() => btn.style.transform = '', 150);
                 
-                colorBtns.forEach(b => b.classList.remove('active'));
+                setClayColor(name, val);
+                
+                for(let j = 0; j < btns.length; j++) {
+                    btns[j].classList.remove('active');
+                }
                 btn.classList.add('active');
             }
-        });
+        };
+        
+        btn.onmouseenter = () => {
+            if (!btn.classList.contains('active')) btn.style.transform = 'scale(1.05)';
+        };
+        btn.onmouseleave = () => {
+            if (!btn.classList.contains('active')) btn.style.transform = '';
+        };
     }
     
-    let defaultBtn = document.querySelector('.color-btn[data-color="Classic Clay"]');
-    if (defaultBtn) {
-        defaultBtn.classList.add('active');
-    }
+    let def = document.querySelector('.color-btn[data-color="Classic Clay"]');
+    if (def) def.classList.add('active');
 }
 
-function setClayColor(colorName, colorValue) {
-    currentClayColor = colorValue;
-    if (clayMaker && clayMaker.clayBall) {
-        clayMaker.setColor(colorValue);
-    }
+function setClayColor(name, val) {
+    clayColor = val;
+    if (clayMaker && clayMaker.ball) clayMaker.setColor(val);
     
     let banner = document.querySelector('.banner h1');
     if (banner) {
-        banner.style.color = '#' + colorValue.toString(16);
+        banner.style.color = '#' + val.toString(16);
+        banner.style.transform = 'scale(1.02)';
+        setTimeout(() => banner.style.transform = '', 200);
     }
 }
 
-function handleKeyPress(event) {
-    if(event.key.toLowerCase() === 'r') {
-        resetClay();
+function keyPress(e) {
+    if(e.key.toLowerCase() === 'r') resetClay();
+    
+    let toolKeys = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
+    if (toolKeys[e.key]) {
+        currentTool = toolKeys[e.key];
+        clayMaker.setTool(currentTool);
+        
+        let toolBtns = document.querySelectorAll('.tool-btn');
+        for(let i = 0; i < toolBtns.length; i++) {
+            toolBtns[i].classList.remove('active');
+            if (toolBtns[i].dataset.tool === currentTool) {
+                toolBtns[i].classList.add('active');
+            }
+        }
+    }
+    
+    if (e.key === '[') {
+        brushSize = Math.max(0.1, brushSize - 0.05);
+        clayMaker.setBrushSize(brushSize);
+        let slider = document.querySelector('.size-slider');
+        if (slider) slider.value = brushSize;
+    }
+    if (e.key === ']') {
+        brushSize = Math.min(0.8, brushSize + 0.05);
+        clayMaker.setBrushSize(brushSize);
+        let slider = document.querySelector('.size-slider');
+        if (slider) slider.value = brushSize;
     }
 }
 
 function resetClay() {
-    if (clayMaker) {
-        clayMaker.resetClay();
+    if (clayMaker) clayMaker.resetClay();
+}
+
+function showHelp() {
+    alert(`
+Clay Sculptor Controls:
+- Click and drag to sculpt
+- [1-5] Change tools
+- [R] Reset clay
+- [ ] Decrease brush size
+- [ ] Increase brush size
+- Mouse: Sculpt the clay
+    `);
+}
+
+function resize() {
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
     }
 }
 
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function handleMouseMove(event) {
-    let rect = renderer.domElement.getBoundingClientRect();
-    mousePos.x = (event.clientX - rect.left) / rect.width * 2 - 1;
-    mousePos.y = -((event.clientY - rect.top) / rect.height * 2 - 1);
+function mouseMove(e) {
+    mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
     if (isDragging) {
         moldClay();
     }
 }
 
-function handleMouseDown(event) {
+function mouseDown(e) {
     isDragging = true;
-    lastMousePos.copy(mousePos);
-    
-    if (event.button === 0) {
-        moldClay();
-    }
+    lastMousePos.set(e.clientX, e.clientY);
+    moldClay();
 }
 
-function handleMouseUp(event) {
+function mouseUp(e) {
     isDragging = false;
+    if (controls) controls.enabled = true;
 }
 
-let isPinching = false;
-let touchX = 0, touchY = 0;
-let touchDist = 0, touchAngle = 0;
-
-function onTouchStart(event) {
-    event.preventDefault();
-    
-    if (event.touches.length === 2) {
-        isPinching = true;
-        let touch1 = event.touches[0];
-        let touch2 = event.touches[1];
+function touchStart(e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        let touch = e.touches[0];
+        mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        touchX = (touch1.clientX + touch2.clientX) / 2;
-        touchY = (touch1.clientY + touch2.clientY) / 2;
-        
-        let dx = touch2.clientX - touch1.clientX;
-        let dy = touch2.clientY - touch1.clientY;
-        touchDist = Math.sqrt(dx * dx + dy * dy);
-        
-        touchAngle = Math.atan2(dy, dx);
-    } else if (event.touches.length === 1) {
         isDragging = true;
-        let touch = event.touches[0];
-        let rect = renderer.domElement.getBoundingClientRect();
-        mousePos.x = (touch.clientX - rect.left) / rect.width * 2 - 1;
-        mousePos.y = -((touch.clientY - rect.top) / rect.height * 2 - 1);
-        lastMousePos.copy(mousePos);
+        lastMousePos.set(touch.clientX, touch.clientY);
+        
+        if (controls) controls.enabled = false;
         
         moldClay(true);
-    }
-}
-
-function onTouchMove(event) {
-    event.preventDefault();
-    
-    if (isPinching && event.touches.length === 2) {
-        let touch1 = event.touches[0];
-        let touch2 = event.touches[1];
-        
-        let dx = touch2.clientX - touch1.clientX;
-        let dy = touch2.clientY - touch1.clientY;
-        let currentDistance = Math.sqrt(dx * dx + dy * dy);
-        
-        let currentAngle = Math.atan2(dy, dx);
-        
-        let scale = currentDistance / touchDist;
-        let rotation = currentAngle - touchAngle;
-        
-        camera.position.multiplyScalar(scale);
-        camera.rotation.y += rotation;
-        
-        touchDist = currentDistance;
-        touchAngle = currentAngle;
-    } else if (isDragging && event.touches.length === 1) {
-        let touch = event.touches[0];
-        let rect = renderer.domElement.getBoundingClientRect();
-        mousePos.x = (touch.clientX - rect.left) / rect.width * 2 - 1;
-        mousePos.y = -((touch.clientY - rect.top) / rect.height * 2 - 1);
-        
-        moldClay(true);
-    }
-}
-
-function onTouchEnd(event) {
-    event.preventDefault();
-    
-    if (event.touches.length < 2) {
-        isPinching = false;
-    }
-    
-    if (event.touches.length === 0) {
+    } else if (e.touches.length === 2) {
+        if (controls) controls.enabled = true;
         isDragging = false;
     }
 }
 
+function touchMove(e) {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+        let touch = e.touches[0];
+        mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        
+        let deltaX = touch.clientX - lastMousePos.x;
+        let deltaY = touch.clientY - lastMousePos.y;
+        let delta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        if (delta > 5) {
+            moldClay(true);
+            lastMousePos.set(touch.clientX, touch.clientY);
+        }
+    }
+}
+
+function touchEnd(e) {
+    e.preventDefault();
+    isDragging = false;
+    if (controls) controls.enabled = true;
+}
+
 function moldClay(isTouch = false) {
-    if (!clayMaker || !clayMaker.clayBall) return;
+    if (!clayMaker || !clayMaker.ball) return;
     
     let raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mousePos, camera);
     
-    let intersects = raycaster.intersectObject(clayMaker.clayBall);
-    
+    let intersects = raycaster.intersectObject(clayMaker.ball);
     if (intersects.length > 0) {
         let point = intersects[0].point;
-        let size = isTouch ? 0.35 : 0.3;
-        let depth = isTouch ? touchMoldPower : moldPower;
         
-        clayMaker.moldClay(point.x, point.y, point.z, size, depth);
+        if (controls) controls.enabled = false;
+        
+        let str = isTouch ? touchStr : moldStr;
+        clayMaker.setStrength(str);
+        clayMaker.moldClay(point.x, point.y, point.z, isTouch);
     }
 }
 
@@ -290,25 +352,33 @@ function animate() {
     
     if (controls) controls.update();
     
+    if (shouldSpin && clayMaker && clayMaker.ball) {
+        clayMaker.ball.rotation.y += spinSpeed;
+    }
+    
     renderer.render(scene, camera);
 }
 
 function setupControls() {
-    controls = new OrbitControls(camera, renderer.domElement);
+    if (!canvas) return;
+    
+    controls = new OrbitControls(camera, canvas.querySelector('canvas'));
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = false;
-    controls.minDistance = 1;
-    controls.maxDistance = 50;
-    controls.maxPolarAngle = Math.PI / 2;
+    controls.dampingFactor = 0.1;
+    controls.enableZoom = true;
+    controls.enablePan = false;
 }
 
 function setupEventListeners() {
-    window.addEventListener('resize', onWindowResize);
-    renderer.domElement.addEventListener('mousemove', handleMouseMove);
-    renderer.domElement.addEventListener('mousedown', handleMouseDown);
-    renderer.domElement.addEventListener('mouseup', handleMouseUp);
-    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
-    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
-    renderer.domElement.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('resize', resize);
+    
+    let canvasEl = canvas.querySelector('canvas');
+    if (canvasEl) {
+        canvasEl.addEventListener('mousemove', mouseMove);
+        canvasEl.addEventListener('mousedown', mouseDown);
+        canvasEl.addEventListener('mouseup', mouseUp);
+        canvasEl.addEventListener('touchstart', touchStart, { passive: false });
+        canvasEl.addEventListener('touchmove', touchMove, { passive: false });
+        canvasEl.addEventListener('touchend', touchEnd, { passive: false });
+    }
 }
