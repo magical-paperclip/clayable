@@ -3,63 +3,34 @@ import * as THREE from './three.module.js';
 export class ClaySculptor {
     constructor(scene) {
         this.scene = scene;
-        this.ball = null;
-        this.geo = null;
-        this.mat = null;
-        this.origVerts = null;
+        this.ball = null; this.geo = null; this.mat = null; this.origVerts = null;
         this.color = 0xe8c291;
-        
-        this.tool = 'push';
-        this.size = 0.3;
-        this.str = 0.02;
-        
+        this.tool = 'push'; this.size = 0.3; this.str = 0.02;
         this.make();
     }
     
     make() {
         let r = 1.2, w = 80, h = 40;
-        
         this.geo = new THREE.SphereGeometry(r, w, h);
         this.origVerts = this.geo.attributes.position.array.slice();
         
-        this.mat = new THREE.MeshPhongMaterial({
-            color: this.color,
-            shininess: 30,
-            specular: 0x222222
-        });
-        
+        this.mat = new THREE.MeshPhongMaterial({ color: this.color, shininess: 30, specular: 0x222222 });
         this.ball = new THREE.Mesh(this.geo, this.mat);
-        this.ball.castShadow = true;
-        this.ball.receiveShadow = true;
-        
+        this.ball.castShadow = true; this.ball.receiveShadow = true;
         this.scene.add(this.ball);
     }
     
     setColor(c) {
         this.color = c;
         if (this.ball && this.mat) {
-            let newMat = new THREE.MeshPhongMaterial({
-                color: c,
-                shininess: 30,
-                specular: 0x222222
-            });
-            
-            this.ball.material = newMat;
-            this.mat = newMat;
+            let newMat = new THREE.MeshPhongMaterial({ color: c, shininess: 30, specular: 0x222222 });
+            this.ball.material = newMat; this.mat = newMat;
         }
     }
     
-    setTool(t) {
-        this.tool = t;
-    }
-    
-    setBrushSize(s) {
-        this.size = s;
-    }
-    
-    setStrength(s) {
-        this.str = s;
-    }
+    setTool(t) { this.tool = t; }
+    setBrushSize(s) { this.size = s; }
+    setStrength(s) { this.str = s; }
 
     moldClay(x, y, z, touch = false) {
         if (!this.geo) return;
@@ -190,13 +161,9 @@ export class ClaySculptor {
     
     resetClay() {
         if (!this.geo || !this.origVerts) return;
-        
         let pos = this.geo.attributes.position;
-        
         for (let i = 0; i < this.origVerts.length; i++) 
             pos.array[i] = this.origVerts[i];
-        
-        pos.needsUpdate = true;
-        this.geo.computeVertexNormals();
+        pos.needsUpdate = true; this.geo.computeVertexNormals();
     }
-} 
+}
