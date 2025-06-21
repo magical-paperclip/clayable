@@ -37,7 +37,16 @@ export class ClaySculptor {
     
     setColor(c) {
         this.color = c;
-        if (this.mat) this.mat.color.setHex(c);
+        if (this.ball && this.mat) {
+            let newMat = new THREE.MeshPhongMaterial({
+                color: c,
+                shininess: 30,
+                specular: 0x222222
+            });
+            
+            this.ball.material = newMat;
+            this.mat = newMat;
+        }
     }
     
     setTool(t) {
@@ -52,7 +61,6 @@ export class ClaySculptor {
         this.str = s;
     }
 
-    // sculpting system - handles all deformation tools
     moldClay(x, y, z, touch = false) {
         if (!this.geo) return;
         
@@ -77,13 +85,15 @@ export class ClaySculptor {
     }
     
     push(pt, pos, v) {
+        let center = new THREE.Vector3(0, 0, 0);
+        
         for (let i = 0; i < pos.count; i++) {
             v.fromBufferAttribute(pos, i);
             let d = v.distanceTo(pt);
             
             if (d < this.size) {
                 let inf = 1 - (d / this.size);
-                let dir = v.clone().sub(pt).normalize();
+                let dir = center.clone().sub(v).normalize();
                 
                 let amt = inf * inf * this.str;
                 v.add(dir.multiplyScalar(amt));

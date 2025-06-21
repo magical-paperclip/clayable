@@ -64,35 +64,40 @@ body {
     background-color: #1a1a1a;
 }
 
+#canvas-container canvas {
+    cursor: grab;
+}
+
 .controls {
     position: fixed;
-    bottom: 30px;
+    bottom: 25px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    gap: 15px;
     align-items: center;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    padding: 16px;
-    border-radius: 20px;
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 
-                0 5px 15px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    background: rgba(13, 17, 23, 0.9);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    padding: 18px 25px;
+    border-radius: 25px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 
+                0 8px 20px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
     z-index: 1000;
     width: fit-content;
-    max-width: 85%;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    max-width: 90%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
     transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .controls:hover {
-    transform: translateX(-50%) translateY(-3px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 
-                0 8px 20px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateX(-50%) translateY(-4px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 
+                0 12px 25px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 .controls.collapsed {
@@ -233,25 +238,20 @@ body {
 }
 
 button {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    color: rgba(255, 255, 255, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 10px 16px;
-    border-radius: 20px;
-    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 6px;
     font-size: 12px;
     font-weight: 500;
-    min-width: 36px;
+    cursor: pointer;
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-    text-transform: lowercase;
-    letter-spacing: 0.3px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     position: relative;
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    text-transform: lowercase;
+    font-family: 'Poppins', sans-serif;
 }
 
 button::before {
@@ -417,31 +417,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4),
                 0 0 0 6px rgba(255, 215, 0, 0.4);
-}
-
-.color-btn[data-color="Classic Clay"] { 
-    background: linear-gradient(135deg, #e8c291, #f0d0a0); 
-    box-shadow: 0 6px 20px rgba(232, 194, 145, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.color-btn[data-color="Blue Clay"] { 
-    background: linear-gradient(135deg, #4a87b3, #5a97c3);
-    box-shadow: 0 6px 20px rgba(74, 135, 179, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.color-btn[data-color="Red Clay"] { 
-    background: linear-gradient(135deg, #c45c5c, #d46c6c);
-    box-shadow: 0 6px 20px rgba(196, 92, 92, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.color-btn[data-color="Green Clay"] { 
-    background: linear-gradient(135deg, #6bab79, #7bbb89);
-    box-shadow: 0 6px 20px rgba(107, 171, 121, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.color-btn[data-color="Purple Clay"] { 
-    background: linear-gradient(135deg, #9370db, #a380eb);
-    box-shadow: 0 6px 20px rgba(147, 112, 219, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.color-btn[data-color="Gray Clay"] { 
-    background: linear-gradient(135deg, #808080, #909090);
-    box-shadow: 0 6px 20px rgba(128, 128, 128, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 @media (max-width: 1200px) {
@@ -756,75 +731,160 @@ footer {
 footer p { margin: 0; color: #e6edf3; }
 
 @media (max-width: 768px) {
-    #ui-container { width: 280px; }
-    .tools button, .tool-btn { padding: 10px 12px; font-size: 12px; }
-    .size-control { padding: 12px; }
-    .color-btn { width: 34px; height: 34px; }
-    .banner { padding: 8px 15px; }
-    .banner h1 { font-size: 1.8rem; }
-    .banner p { font-size: 0.8rem; }
+    .banner { 
+        padding: 8px 15px; 
+    }
+    .banner h1 { 
+        font-size: 1.8rem; 
+    }
+    .banner p { 
+        font-size: 0.8rem; 
+    }
+    
     .tutorial-btn {
-        width: 45px;
-        height: 45px;
-        font-size: 20px;
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
         top: 15px;
         right: 15px;
     }
+    
     .controls {
-        bottom: 20px;
-        width: calc(100vw - 40px);
-        max-width: none;
-        padding: 8px;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: center;
+        bottom: 15px;
+        padding: 12px 18px;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 95%;
+        border-radius: 20px;
     }
-    .controls-toggle {
-        top: -15px; width: 30px; height: 15px; font-size: 10px;
-    }
-    .color-group {
-        padding: 6px; gap: 6px;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: 100%;
-    }
-    .color-btn {
-        width: 32px; height: 32px;
-        min-width: 32px;
-        border-width: 2px;
-    }
-    .color-btn.active { border-width: 3px; }
-    .mold-group {
-        width: 100%;
+    
+    .control-row {
         display: flex;
         justify-content: center;
-        margin-top: 8px;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
     }
-    button {
+    
+    .controls-toggle {
+        width: 60px;
+        height: 30px;
+        font-size: 16px;
+        top: -30px;
+    }
+    
+    .color-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px;
+        max-width: 100%;
+    }
+    
+    .color-btn {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px;
+        font-size: 9px;
+        margin: 2px;
+        border-width: 2px;
+    }
+    
+    .color-btn.active { 
+        border-width: 3px; 
+        transform: scale(1.1);
+    }
+    
+    .tool-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+    }
+    
+    .tool-btn {
+        padding: 8px 12px;
+        font-size: 11px;
+        min-width: 50px;
+        height: 32px;
+    }
+    
+    .size-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         padding: 6px 12px;
-        font-size: 12px;
-        min-width: 28px; height: 28px;
     }
-    #canvas-container { touch-action: manipulation; }
+    
+    .size-slider {
+        width: 80px;
+    }
+    
+    .mold-group {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+    }
+    
+    button {
+        padding: 8px 12px;
+        font-size: 11px;
+        min-height: 32px;
+    }
+    
+    #canvas-container { 
+        touch-action: manipulation; 
+    }
 }
 
 @media (max-width: 480px) {
-    .banner h1 { font-size: 1.5rem; }
-    .banner p { font-size: 0.75rem; }
+    .banner h1 { 
+        font-size: 1.5rem; 
+    }
+    .banner p { 
+        font-size: 0.75rem; 
+    }
+    
     .tutorial-btn {
-        width: 40px;
-        height: 40px;
-        font-size: 18px;
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
         top: 12px;
         right: 12px;
     }
+    
     .controls {
-        bottom: 15px;
-        width: calc(100vw - 20px);
-        padding: 6px;
+        bottom: 10px;
+        padding: 10px 12px;
+        gap: 10px;
+        max-width: 98%;
+        border-radius: 16px;
     }
-    .color-btn { width: 28px; height: 28px; min-width: 28px; }
-    button { padding: 5px 10px; font-size: 11px; min-width: 24px; height: 24px; }
+    
+    .color-btn { 
+        width: 38px !important; 
+        height: 38px !important; 
+        min-width: 38px;
+        font-size: 8px;
+    }
+    
+    .tool-btn {
+        padding: 6px 10px;
+        font-size: 10px;
+        min-width: 45px;
+        height: 28px;
+    }
+    
+    .size-slider {
+        width: 60px;
+    }
+    
+    button { 
+        padding: 6px 10px; 
+        font-size: 10px; 
+        min-height: 28px;
+    }
 }
 
 @media (max-height: 600px) {
@@ -846,7 +906,7 @@ footer p { margin: 0; color: #e6edf3; }
     display: flex;
     gap: 6px;
     align-items: center;
-    padding: 6px;
+        padding: 6px;
     background: rgba(255, 255, 255, 0.08);
     border-radius: 15px;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -858,15 +918,15 @@ footer p { margin: 0; color: #e6edf3; }
 .tool-group:hover {
     background: rgba(255, 255, 255, 0.12);
     transform: translateY(-1px);
-}
-
+    }
+    
 .tool-group .tool-btn {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 8px 12px;
     border-radius: 12px;
-    font-size: 11px;
+        font-size: 11px;
     font-weight: 500;
     min-width: 45px;
     height: 32px;
@@ -903,16 +963,16 @@ footer p { margin: 0; color: #e6edf3; }
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     color: white;
-}
-
+    }
+    
 .tool-group .tool-btn.active {
     background: linear-gradient(135deg, rgba(232, 194, 145, 0.3), rgba(255, 215, 0, 0.2));
     color: #e8c291;
     border-color: rgba(232, 194, 145, 0.5);
     box-shadow: 0 0 15px rgba(232, 194, 145, 0.4), 0 4px 15px rgba(0, 0, 0, 0.3);
     transform: none;
-}
-
+    }
+    
 .size-group {
     display: flex;
     align-items: center;
@@ -923,8 +983,8 @@ footer p { margin: 0; color: #e6edf3; }
     border: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0;
     transition: all 0.3s ease;
-}
-
+    }
+    
 .size-group:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.2);
@@ -963,15 +1023,15 @@ footer p { margin: 0; color: #e6edf3; }
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3),
                 0 0 0 2px rgba(232, 194, 145, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.6);
-}
-
+    }
+    
 .size-slider::-webkit-slider-thumb:hover {
     background: linear-gradient(135deg, #ffd700, #ffed4e);
     transform: scale(1.15);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4),
                 0 0 0 4px rgba(255, 215, 0, 0.4);
-}
-
+    }
+    
 .help-btn {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
@@ -996,8 +1056,8 @@ footer p { margin: 0; color: #e6edf3; }
     transform: scale(1.1) rotate(5deg);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     color: white;
-}
-
+    }
+    
 .tutorial-btn {
     position: fixed;
     top: 20px;
@@ -1054,3 +1114,58 @@ footer p { margin: 0; color: #e6edf3; }
     transform: translateY(-1px) scale(1.02);
 }
 
+.mold-group {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.mold-group button {
+    flex: 1;
+    max-width: 120px;
+}
+
+.theme-btn {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+    text-transform: lowercase;
+}
+
+.theme-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.4s ease;
+}
+
+.theme-btn:hover::before {
+    left: 100%;
+}
+
+.theme-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    color: white;
+}
+
+.theme-btn:active {
+    transform: translateY(-1px) scale(0.98);
+}

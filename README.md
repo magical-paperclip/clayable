@@ -1,31 +1,31 @@
 # clayable
 
-interactive clay sculpting in the browser.
+Interactive clay sculpting in the browser using Three.js
 
-## features
+## Features
 
-- **tools**: push, pull, smooth, pinch, inflate
-- **colors**: classic, blue, red, green, purple, gray  
-- **controls**: adjustable brush size, reset function
-- **interface**: touch and mouse support
+- **Sculpting tools**: push, pull, smooth, pinch, inflate
+- **Color themes**: warm, cool, dark, soft, earth, ocean palettes  
+- **Cross-platform**: works on desktop and mobile devices
+- **Real-time**: immediate visual feedback while sculpting
 
-## getting started
+## Getting Started
 
-1. open `index.html` in your browser
-2. start sculpting!
+Open `index.html` in your web browser and start sculpting.
 
-## controls
+## Controls
 
-- **mouse/touch**: sculpt clay
-- **scroll/pinch**: zoom view
-- **right-click + drag**: rotate view
-- **1-5 keys**: select tools
-- **[ ] keys**: change brush size
-- **r key**: reset clay
-- **space**: auto-rotate
+- **Mouse/Touch**: drag to sculpt clay
+- **Mouse wheel**: zoom in/out
+- **Right-click + drag**: rotate camera view
+- **Number keys 1-5**: select sculpting tools
+- **Bracket keys [ ]**: adjust brush size
+- **R key**: reset clay to original sphere
+- **Space bar**: toggle auto-rotation
+- **T key**: cycle through color themes
 
-## tech
+## Built With
 
-- three.js
-- vanilla javascript
-- no dependencies
+- Three.js for 3D rendering
+- Vanilla JavaScript
+- CSS3 for UI styling

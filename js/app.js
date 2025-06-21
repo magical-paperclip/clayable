@@ -11,14 +11,132 @@ let spin = false, spinSpd = 0.001;
 let fog = true, shadows = true, follow = true;
 let useTex = true, texScale = 0.3, texStr = 0.1;
 let clayColor = 0xe8c291;
-let colors = {
-    'Classic Clay': 0xe8c291,
-    'Blue Clay': 0x4a87b3,
-    'Red Clay': 0xc45c5c,
-    'Green Clay': 0x6bab79,
-    'Purple Clay': 0x9370db,
-    'Gray Clay': 0x808080
+
+let currentTheme = 'warm';
+let themes = {
+    warm: {
+        name: 'warm',
+        bg: 0x1a1a1a,
+        clay: 0xe8c291,
+        title: '#e8c291',
+        lighting: {
+            ambient: { color: 0xffd4a3, intensity: 0.4 },
+            key: { color: 0xffb366, intensity: 0.9, pos: [8, 12, 6] },
+            fill: { color: 0xffe6cc, intensity: 0.3, pos: [-6, 3, 4] },
+            rim: { color: 0xff9933, intensity: 0.5, pos: [2, -5, 8] }
+        },
+        colors: {
+            'classic': 0xe8c291,
+            'terracotta': 0xd2691e,
+            'amber': 0xffbf00,
+            'copper': 0xb87333,
+            'sand': 0xc2b280,
+            'cream': 0xfffdd0
+        }
+    },
+    cool: {
+        name: 'cool',
+        bg: 0x0f1419,
+        clay: 0x7fb3d3,
+        title: '#7fb3d3',
+        lighting: {
+            ambient: { color: 0xb3d9ff, intensity: 0.3 },
+            key: { color: 0x87ceeb, intensity: 0.8, pos: [10, 8, 7] },
+            fill: { color: 0xe0f6ff, intensity: 0.4, pos: [-8, 5, 3] },
+            rim: { color: 0x4682b4, intensity: 0.6, pos: [3, -8, 9] }
+        },
+        colors: {
+            'ice': 0xb8e6e6,
+            'steel': 0x708090,
+            'slate': 0x6c7b7f,
+            'mint': 0x98fb98,
+            'sage': 0x9caf88,
+            'pearl': 0xf8f8ff
+        }
+    },
+    dark: {
+        name: 'dark',
+        bg: 0x0a0a0a,
+        clay: 0x404040,
+        title: '#888888',
+        lighting: {
+            ambient: { color: 0x404040, intensity: 0.2 },
+            key: { color: 0xffffff, intensity: 1.2, pos: [15, 15, 10] },
+            fill: { color: 0x666666, intensity: 0.2, pos: [-12, 8, 5] },
+            rim: { color: 0xcccccc, intensity: 0.8, pos: [5, -12, 12] }
+        },
+        colors: {
+            'charcoal': 0x36454f,
+            'graphite': 0x41424c,
+            'smoke': 0x738276,
+            'ash': 0x918e85,
+            'iron': 0x464451,
+            'silver': 0xc0c0c0
+        }
+    },
+    soft: {
+        name: 'soft',
+        bg: 0x1c1b1f,
+        clay: 0xd4a574,
+        title: '#d4a574',
+        lighting: {
+            ambient: { color: 0xffeee6, intensity: 0.5 },
+            key: { color: 0xffd9cc, intensity: 0.7, pos: [6, 10, 8] },
+            fill: { color: 0xffe6f2, intensity: 0.5, pos: [-5, 6, 6] },
+            rim: { color: 0xffb3d9, intensity: 0.4, pos: [4, -6, 10] }
+        },
+        colors: {
+            'blush': 0xf4c2c2,
+            'peach': 0xffcba4,
+            'lavender': 0xe6e6fa,
+            'rose': 0xffc0cb,
+            'cream': 0xfdf6e3,
+            'powder': 0xb0c4de
+        }
+    },
+    earth: {
+        name: 'earth',
+        bg: 0x2c1810,
+        clay: 0x8b4513,
+        title: '#cd853f',
+        lighting: {
+            ambient: { color: 0xd4a574, intensity: 0.35 },
+            key: { color: 0xf4e4bc, intensity: 0.9, pos: [12, 14, 8] },
+            fill: { color: 0xb8860b, intensity: 0.4, pos: [-8, 6, 5] },
+            rim: { color: 0x8fbc8f, intensity: 0.3, pos: [6, -10, 12] }
+        },
+        colors: {
+            'clay': 0x8b4513,
+            'moss': 0x8a9a5b,
+            'forest': 0x355e3b,
+            'stone': 0x928e85,
+            'rust': 0xb7410e,
+            'bone': 0xf9f6ee
+        }
+    },
+    ocean: {
+        name: 'ocean',
+        bg: 0x0d1321,
+        clay: 0x415a77,
+        title: '#778da9',
+        lighting: {
+            ambient: { color: 0x4169e1, intensity: 0.25 },
+            key: { color: 0x87ceeb, intensity: 1.0, pos: [14, 12, 9] },
+            fill: { color: 0x00ced1, intensity: 0.35, pos: [-10, 7, 4] },
+            rim: { color: 0x20b2aa, intensity: 0.7, pos: [7, -9, 11] }
+        },
+        colors: {
+            'deep': 0x1d3557,
+            'wave': 0x457b9d,
+            'foam': 0xa8dadc,
+            'coral': 0xf1faee,
+            'tide': 0x778da9,
+            'shore': 0xe63946
+        }
+    }
 };
+
+let colors = themes[currentTheme].colors;
 let moldStr = 0.02, touchStr = 0.035;
 let tool = 'push';
 let size = 0.3;
@@ -26,56 +144,85 @@ let size = 0.3;
 let clay;
 let port = 3001; 
 
+// lighting setup
+let ambientLight, keyLight, fillLight, rimLight;
+
+// mouse interaction
+let overClay = false;
+let raycaster = new THREE.Raycaster();
+
+let initialized = false;
+
+function setupLighting() {
+    // remove existing lights
+    if (ambientLight) scene.remove(ambientLight);
+    if (keyLight) scene.remove(keyLight);
+    if (fillLight) scene.remove(fillLight);
+    if (rimLight) scene.remove(rimLight);
+    
+    let lighting = themes[currentTheme].lighting;
+    
+    ambientLight = new THREE.AmbientLight(lighting.ambient.color, lighting.ambient.intensity);
+    scene.add(ambientLight);
+    
+    keyLight = new THREE.DirectionalLight(lighting.key.color, lighting.key.intensity);
+    keyLight.position.set(...lighting.key.pos);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    scene.add(keyLight);
+    
+    fillLight = new THREE.DirectionalLight(lighting.fill.color, lighting.fill.intensity);
+    fillLight.position.set(...lighting.fill.pos);
+    scene.add(fillLight);
+    
+    rimLight = new THREE.DirectionalLight(lighting.rim.color, lighting.rim.intensity);
+    rimLight.position.set(...lighting.rim.pos);
+    scene.add(rimLight);
+}
+
 init();
 
 function init() {
-    try {
-        canvas = document.getElementById('canvas-container');
-        if (!canvas) return;
+    if (initialized) return;
+    initialized = true;
+    
+    canvas = document.getElementById('canvas-container');
+    if (!canvas) return;
+    
+    canvas.innerHTML = '';
 
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a1a);
-        
-        cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        cam.position.set(0, 0, 5);
-        cam.lookAt(0, 0, 0);
-        
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        canvas.appendChild(renderer.domElement);
-        
-        let light1 = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(light1);
-        
-        let light2 = new THREE.DirectionalLight(0xffffff, 0.8);
-        light2.position.set(10, 10, 5);
-        light2.castShadow = true;
-        light2.shadow.mapSize.width = 2048;
-        light2.shadow.mapSize.height = 2048;
-        scene.add(light2);
-        
-        let light3 = new THREE.DirectionalLight(0xffffff, 0.3);
-        light3.position.set(-5, 0, 5);
-        scene.add(light3);
-        
-        clay = new ClaySculptor(scene);
-        clay.setColor(clayColor);
-        
-        setupControls();
-        setupEvents();
-        window.onkeydown = onKey;
-        makeUI();
-        animate();
-    } catch (e) {
-        console.log('init failed');
-    }
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(themes[currentTheme].bg);
+    
+    cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    cam.position.set(0, 0, 5);
+    cam.lookAt(0, 0, 0);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    canvas.appendChild(renderer.domElement);
+    
+    setupLighting();
+    
+    clay = new ClaySculptor(scene);
+    clay.setColor(clayColor);
+    
+    setupControls();
+    setupEvents();
+    window.onkeydown = onKey;
+    makeUI();
+    animate();
 }
 
 function makeUI() {
     let ctrl = document.querySelector('.controls');
     if (!ctrl) return;
+    
+    ctrl.innerHTML = '';
     
     let toggle = document.createElement('div');
     toggle.className = 'controls-toggle';
@@ -88,7 +235,7 @@ function makeUI() {
     };
 
     let resetBtn = document.createElement('button');
-    resetBtn.textContent = 'reset clay';
+    resetBtn.textContent = 'reset';
     resetBtn.onclick = () => {
         resetBtn.style.transform = 'scale(0.95)';
         setTimeout(() => resetBtn.style.transform = '', 100);
@@ -149,6 +296,14 @@ function makeUI() {
     toolRow.appendChild(toolGrp);
     toolRow.appendChild(sizeBox);
     
+    let colorRow = document.createElement('div');
+    colorRow.className = 'control-row';
+    
+    let colorGrp = document.createElement('div');
+    colorGrp.className = 'color-group';
+    
+    colorRow.appendChild(colorGrp);
+    
     let bottomRow = document.createElement('div');
     bottomRow.className = 'control-row';
     
@@ -156,13 +311,123 @@ function makeUI() {
     moldGrp.className = 'mold-group';
     moldGrp.appendChild(resetBtn);
     
+    let themeBtn = document.createElement('button');
+    themeBtn.textContent = 'theme';
+    themeBtn.className = 'theme-btn';
+    themeBtn.onclick = () => {
+        themeBtn.style.transform = 'scale(0.95)';
+        setTimeout(() => themeBtn.style.transform = '', 100);
+        switchTheme();
+    };
+    
+    moldGrp.appendChild(themeBtn);
     bottomRow.appendChild(moldGrp);
     
     ctrl.appendChild(toolRow);
+    ctrl.appendChild(colorRow);
     ctrl.appendChild(bottomRow);
     
-    setupColors();
+    updateColorButtons();
     setupTutorial();
+}
+
+function switchTheme() {
+    let themeKeys = Object.keys(themes);
+    let idx = themeKeys.indexOf(currentTheme);
+    let nextIdx = (idx + 1) % themeKeys.length;
+    currentTheme = themeKeys[nextIdx];
+    
+    applyTheme();
+}
+
+function applyTheme() {
+    let theme = themes[currentTheme];
+    
+    scene.background = new THREE.Color(theme.bg);
+    colors = theme.colors;
+    clayColor = theme.clay;
+    
+    if (clay && clay.ball) clay.setColor(clayColor);
+    
+    let title = document.querySelector('.banner h1');
+    if (title) {
+        title.style.color = theme.title;
+    }
+    
+    setupLighting();
+    updateColorButtons();
+}
+
+function updateColorButtons() {
+    let colorGrp = document.querySelector('.color-group');
+    if (!colorGrp) return;
+    
+    colorGrp.innerHTML = '';
+    
+    Object.keys(colors).forEach(name => {
+        let btn = document.createElement('button');
+        btn.className = 'color-btn';
+        btn.dataset.color = name;
+        btn.textContent = name.substring(0,3);
+        btn.style.backgroundColor = '#' + colors[name].toString(16).padStart(6, '0');
+        btn.style.width = '50px';
+        btn.style.height = '50px';
+        btn.style.border = '2px solid white';
+        btn.style.borderRadius = '50%';
+        btn.style.margin = '5px';
+        btn.style.cursor = 'pointer';
+        btn.style.fontSize = '10px';
+        btn.style.color = 'white';
+        btn.style.fontWeight = 'bold';
+        btn.style.textShadow = '1px 1px 1px black';
+        btn.style.transition = 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        btn.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+        btn.style.position = 'relative';
+        btn.style.overflow = 'hidden';
+        
+        btn.onclick = () => {
+            changeColor(name, colors[name]);
+            
+            document.querySelectorAll('.color-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.borderWidth = '2px';
+                b.style.borderColor = 'white';
+                b.style.transform = 'scale(1) translateY(0)';
+                b.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+            });
+            
+            btn.classList.add('active');
+            btn.style.borderWidth = '3px';
+            btn.style.borderColor = '#e8c291';
+            btn.style.transform = 'scale(1.1)';
+            btn.style.boxShadow = '0 6px 20px rgba(232, 194, 145, 0.4), 0 0 0 4px rgba(232, 194, 145, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+        };
+        
+        btn.onmouseenter = () => {
+            if (!btn.classList.contains('active')) {
+                btn.style.transform = 'scale(1.15) translateY(-2px)';
+                btn.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                btn.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+            }
+        };
+        btn.onmouseleave = () => {
+            if (!btn.classList.contains('active')) {
+                btn.style.transform = 'scale(1) translateY(0)';
+                btn.style.borderColor = 'rgba(255, 255, 255, 1)';
+                btn.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+            }
+        };
+        
+        if (colors[name] === clayColor) {
+            btn.classList.add('active');
+            btn.style.borderWidth = '3px';
+            btn.style.borderColor = '#e8c291';
+            btn.style.transform = 'scale(1.1)';
+            btn.style.boxShadow = '0 6px 20px rgba(232, 194, 145, 0.4), 0 0 0 4px rgba(232, 194, 145, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+        }
+        
+        colorGrp.appendChild(btn);
+    });
 }
 
 function setupTutorial() {
@@ -176,46 +441,17 @@ function setupTutorial() {
     }
 }
 
-function setupColors() {
-    let btns = document.querySelectorAll('.color-btn');
-    btns.forEach(btn => {
-        btn.onclick = () => {
-            let name = btn.dataset.color;
-            let val = colors[name];
-            if (!val) return;
-            
-            btn.style.transform = 'scale(0.9)';
-            setTimeout(() => btn.style.transform = '', 150);
-            
-            changeColor(name, val);
-            
-            btns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        };
-        
-        btn.onmouseenter = () => {
-            if (!btn.classList.contains('active')) {
-                btn.style.transform = 'scale(1.05)';
-            }
-        };
-        btn.onmouseleave = () => {
-            if (!btn.classList.contains('active')) {
-                btn.style.transform = '';
-            }
-        };
-    });
-    
-    let def = document.querySelector('.color-btn[data-color="Classic Clay"]');
-    if (def) def.classList.add('active');
-}
-
 function changeColor(name, val) {
     clayColor = val;
-    if (clay && clay.ball) clay.setColor(val);
+    
+    if (clay && clay.ball) {
+        clay.setColor(val);
+    }
     
     let title = document.querySelector('.banner h1');
     if (title) {
-        title.style.color = '#' + val.toString(16);
+        let hexColor = '#' + val.toString(16).padStart(6, '0');
+        title.style.color = hexColor;
         title.style.transform = 'scale(1.02)';
         setTimeout(() => title.style.transform = '', 200);
     }
@@ -226,6 +462,9 @@ function onKey(e) {
     if (e.key === ' ') {
         e.preventDefault();
         spin = !spin;
+    }
+    if (e.key.toLowerCase() === 't') {
+        switchTheme();
     }
     
     let toolKeys = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
@@ -261,74 +500,106 @@ function reset() {
 }
 
 function showTutorial() {
-    alert(`🎨 clayable tutorial
+    alert(`clayable tutorial
 
 basic controls:
-• drag your mouse or finger to sculpt
-• use mouse wheel or two fingers to zoom
-• right-click and drag to rotate view
+• drag to sculpt the clay
+• mouse wheel to zoom
+• right-click drag to rotate view
 
 tools (keys 1-5):
-• push (1) - push clay inward
-• pull (2) - pull clay outward  
-• smooth (3) - smooth rough areas
-• pinch (4) - create sharp details
-• inflate (5) - expand clay volume
+• push (1) - pushes clay inward
+• pull (2) - pulls clay outward
+• smooth (3) - smooths rough areas
+• pinch (4) - creates sharp details
+• inflate (5) - expands clay volume
 
-size controls:
+controls:
 • [ ] keys to change brush size
 • or use the size slider
 
-color selection:
-• click color buttons to change clay color
-• title color changes to match your selection
+colors:
+• click color buttons to change clay
+• title color changes too
 
-other keys:
-• r - reset clay to original sphere
-• space - auto-rotate clay ball
+keyboard shortcuts:
+• r - reset clay to sphere
+• space - toggle auto-rotation
+• t - switch theme
+
+themes available:
+• warm - earthy tones
+• cool - blues and greens
+• dark - grays and blacks
+• soft - pastel colors
+• earth - natural browns/greens
+• ocean - deep blues
 
 tips:
-• start with large brush for basic shapes
-• use smaller brush for fine details
-• smooth tool helps blend areas together
-• try different colors to see your work better!`);
-}
-
-function showHelp() {
-    alert(`
-Clay thing:
-- drag to sculpt
-- 1-5 for tools  
-- R to reset
-- [ ] for size
-- mouse does stuff
-    `);
+• use large brush for basic shaping
+• use small brush for fine details
+• smooth tool helps blend areas`);
 }
 
 function resize() {
     if (cam && renderer) {
         cam.aspect = window.innerWidth / window.innerHeight;
         cam.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
 }
 
 function onMouseMove(e) {
     mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
     mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
+    checkClayHover();
+    
     if (dragging) sculpt();
 }
 
+function checkClayHover() {
+    if (!clay || !clay.ball) return;
+    
+    raycaster.setFromCamera(mousePos, cam);
+    let hits = raycaster.intersectObject(clay.ball);
+    
+    let wasOverClay = overClay;
+    overClay = hits.length > 0;
+    
+    let canvasEl = canvas.querySelector('canvas');
+    if (!canvasEl) return;
+    
+    if (overClay && !wasOverClay) {
+        canvasEl.style.cursor = 'crosshair';
+    } else if (!overClay && wasOverClay) {
+        canvasEl.style.cursor = 'grab';
+    }
+}
+
 function onMouseDown(e) {
-    dragging = true;
-    lastMouse.set(e.clientX, e.clientY);
-    sculpt();
+    let canvasEl = canvas.querySelector('canvas');
+    
+    if (overClay && e.button === 0) {
+        e.preventDefault();
+        dragging = true;
+        lastMouse.set(e.clientX, e.clientY);
+        if (canvasEl) canvasEl.style.cursor = 'crosshair';
+        sculpt();
+    } else {
+        if (canvasEl) canvasEl.style.cursor = 'grabbing';
+    }
 }
 
 function onMouseUp(e) {
     dragging = false;
-    if (controls) controls.enabled = true;
+    let canvasEl = canvas.querySelector('canvas');
+    
+    if (overClay) {
+        if (canvasEl) canvasEl.style.cursor = 'crosshair';
+    } else {
+        if (canvasEl) canvasEl.style.cursor = 'grab';
+    }
 }
 
 function onTouchStart(e) {
@@ -338,13 +609,15 @@ function onTouchStart(e) {
         mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        dragging = true;
-        lastMouse.set(touch.clientX, touch.clientY);
+        raycaster.setFromCamera(mousePos, cam);
+        let hits = raycaster.intersectObject(clay.ball);
         
-        if (controls) controls.enabled = false;
-        sculpt(true);
+        if (hits.length > 0) {
+            dragging = true;
+            lastMouse.set(touch.clientX, touch.clientY);
+            sculpt(true);
+        }
     } else if (e.touches.length === 2) {
-        if (controls) controls.enabled = true;
         dragging = false;
     }
 }
@@ -370,20 +643,16 @@ function onTouchMove(e) {
 function onTouchEnd(e) {
     e.preventDefault();
     dragging = false;
-    if (controls) controls.enabled = true;
 }
 
 function sculpt(touch = false) {
     if (!clay || !clay.ball) return;
     
-    let ray = new THREE.Raycaster();
-    ray.setFromCamera(mousePos, cam);
+    raycaster.setFromCamera(mousePos, cam);
+    let hits = raycaster.intersectObject(clay.ball);
     
-    let hits = ray.intersectObject(clay.ball);
     if (hits.length > 0) {
         let pt = hits[0].point;
-        
-        if (controls) controls.enabled = false;
         
         let str = touch ? touchStr : moldStr;
         clay.setStrength(str);
@@ -411,6 +680,11 @@ function setupControls() {
     controls.dampingFactor = 0.1;
     controls.enableZoom = true;
     controls.enablePan = false;
+    controls.mouseButtons = {
+        LEFT: null,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE
+    };
 }
 
 function setupEvents() {
@@ -425,4 +699,8 @@ function setupEvents() {
         canvasEl.addEventListener('touchmove', onTouchMove, { passive: false });
         canvasEl.addEventListener('touchend', onTouchEnd, { passive: false });
     }
+    
+    document.addEventListener('keydown', onKey);
 }
+
+init();
