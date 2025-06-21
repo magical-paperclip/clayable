@@ -1,31 +1,31 @@
 # clayable
 
-Interactive clay sculpting in the browser using Three.js
+clayable is a interactive clay sculpting exprience accessible in your browser using three.js
 
-## Features
+## features
 
-- **Sculpting tools**: push, pull, smooth, pinch, inflate
-- **Color themes**: warm, cool, dark, soft, earth, ocean palettes  
-- **Cross-platform**: works on desktop and mobile devices
-- **Real-time**: immediate visual feedback while sculpting
+- **sculpting tools**: push, pull, smooth, pinch, inflate
+- **color themes**: warm, cool, dark, soft, earth, ocean palettes  
+- **cross-platform**: works on desktop and mobile 
+- **real-time**: immediate visual feedback while sculpting
 
-## Getting Started
+## getting started
 
-Open `index.html` in your web browser and start sculpting.
+open `https://clayable.vercel.app' in your web browser and start sculpting
 
-## Controls
+## controls
 
-- **Mouse/Touch**: drag to sculpt clay
-- **Mouse wheel**: zoom in/out
-- **Right-click + drag**: rotate camera view
-- **Number keys 1-5**: select sculpting tools
-- **Bracket keys [ ]**: adjust brush size
-- **R key**: reset clay to original sphere
-- **Space bar**: toggle auto-rotation
-- **T key**: cycle through color themes
+- **mouse/touch**: drag to sculpt clay
+- **mouse wheel**: zoom in/out
+- **right-click + drag**: rotate camera view
+- **number keys 1-5**: select sculpting tools
+- **bracket keys [ ]**: adjust brush size
+- **r key**: reset clay to original sphere
+- **space bar**: toggle auto-rotation
+- **t key**: cycle through color themes
 
-## Built With
+## built With
 
-- Three.js for 3D rendering
-- Vanilla JavaScript
-- CSS3 for UI styling
+- three.js - 3D rendering
+- vanilla Jjs
+- css3 for ui 
