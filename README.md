@@ -11,7 +11,7 @@ clayable is a interactive clay sculpting exprience accessible in your browser us
 
 ## getting started
 
-open `https://clayable.vercel.app' in your web browser and start sculpting
+open https://clayable.vercel.app in your web browser and start sculpting
 
 ## controls
 
