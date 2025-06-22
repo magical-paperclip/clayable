@@ -1,64 +1,54 @@
-export class ImageUpload {
-    constructor(id) {
-        this.cont = document.getElementById(id);
-        this.input = null; this.preview = null; this.btn = null; this.img = null;
-        this.setup();
-    }
+// quick img upload thing
+
+let cont = null, input = null, preview = null;
+
+function makeUI() {
+    cont = document.createElement('div');
+    cont.className = 'img-upload';
+    cont.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 1000;
+        background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
+        display: none; min-width: 200px;
+    `;
     
-    setup() { this.makeUI(); this.addEvents(); }
+    let title = document.createElement('h3');
+    title.textContent = 'upload texture'; title.style.margin = '0 0 10px 0'; title.style.color = '#fff';
     
-    makeUI() {
-        let wrap = document.createElement('div'); wrap.className = 'upload-wrapper';
-        
-        this.input = document.createElement('input');
-        this.input.type = 'file'; this.input.accept = 'image/*'; this.input.style.display = 'none';
-        
-        this.btn = document.createElement('button');
-        this.btn.textContent = 'Upload Image'; this.btn.className = 'upload-btn';
-        
-        this.preview = document.createElement('img');
-        this.preview.className = 'preview-img'; this.preview.style.display = 'none';
-        
-        wrap.appendChild(this.input); wrap.appendChild(this.btn); wrap.appendChild(this.preview);
-        this.cont.appendChild(wrap);
-    }
+    input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.style.width = '100%';
     
-    addEvents() {
-        this.btn.onclick = () => this.input.click();
-        this.input.onchange = (e) => this.handle(e);
-    }
+    preview = document.createElement('div');
+    preview.style.cssText = 'margin-top: 10px; text-align: center;';
     
-    handle(e) {
-        let file = e.target.files[0];
-        if (!file) return;
-        
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
-            return;
-        }
-        
-        let reader = new FileReader();
-        reader.onload = (e) => this.show(e.target.result);
-        reader.readAsDataURL(file);
-    }
+    cont.appendChild(title); cont.appendChild(input); cont.appendChild(preview);
+    document.body.appendChild(cont);
     
-    show(src) {
-        this.preview.src = src;
-        this.preview.style.display = 'block';
-        this.img = src;
-        
-        this.btn.textContent = 'Change Image';
-    }
+    addEvents();
+}
+
+function addEvents() {
+    if (input) input.addEventListener('change', handle);
+}
+
+function handle(e) {
+    let file = e.target.files[0];
+    if (!file) return;
     
-    getData() {
-        return this.img;
-    }
-    
-    clear() {
-        this.preview.style.display = 'none';
-        this.preview.src = '';
-        this.img = null;
-        this.btn.textContent = 'Upload Image';
-        this.input.value = '';
-    }
-} 
+    let reader = new FileReader();
+    reader.onload = (e) => show(e.target.result);
+    reader.readAsDataURL(file);
+}
+
+function show(src) {
+    preview.innerHTML = '';
+    let img = document.createElement('img');
+    img.src = src; img.style.cssText = 'max-width: 150px; max-height: 150px; border-radius: 4px;';
+    preview.appendChild(img);
+}
+
+function toggle() {
+    if (!cont) makeUI();
+    cont.style.display = cont.style.display === 'none' ? 'block' : 'none';
+}
+
+export { makeUI, toggle }; 

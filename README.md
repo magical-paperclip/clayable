@@ -1,13 +1,13 @@
 # clayable
 
-sculpt clay in your browser with three.js
+sculpt clay in your browser with threejs
 
 ## features
 
 - sculpting tools: push, pull, smooth, pinch, inflate
 - color themes: warm, cool, dark, soft, earth, ocean
 - works on desktop and mobile 
-- real-time sculpting feedback
+- realtime sculpting feedback
 
 ## getting started
 
