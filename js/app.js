@@ -11,7 +11,7 @@ let clayColor = 0xe8c291;
 
 let currentTheme = 0;
 let themes = [
-    { // warm
+    { // warm theme
         bg: 0x1a1a1a, clay: 0xe8c291, 
         ambLight: 0xffd4a3, keyLight: 0xffb366,
         colors: { 'clay': 0xe8c291, 'terra': 0xd2691e, 'amber': 0xffbf00, 'sand': 0xc2b280 }
@@ -21,7 +21,7 @@ let themes = [
         ambLight: 0x404040, keyLight: 0xffffff, 
         colors: { 'grey': 0x404040, 'silver': 0xc0c0c0, 'iron': 0x464451, 'ash': 0x918e85 }
     },
-    { // blue theme - TODO: better colors
+    { // blue theme
         bg: 0x0f1419, clay: 0x7fb3d3,
         ambLight: 0xb3d9ff, keyLight: 0x87ceeb,
         colors: { 'blue': 0x7fb3d3, 'ice': 0xb8e6e6, 'steel': 0x708090, 'mint': 0x98fb98 }
@@ -35,7 +35,6 @@ let ambLight, keyLight;
 let overClay = false, raycaster = new THREE.Raycaster(), initialized = false;
 
 function setupLighting() {
-    // clear old lights
     if (ambLight) scene.remove(ambLight);
     if (keyLight) scene.remove(keyLight);
     
@@ -58,14 +57,12 @@ function init() {
     if (!canvas) return;
     canvas.innerHTML = '';
 
-    // setup scene stuff
     scene = new THREE.Scene();
     scene.background = new THREE.Color(themes[currentTheme].bg);
     
     cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     cam.position.set(0, 0, 5); cam.lookAt(0, 0, 0);
 
-    // renderer stuff
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -74,13 +71,14 @@ function init() {
 
     setupLighting();
 
-    // make clay ball
     clay = new ClaySculptor(scene); 
     clay.setColor(themes[currentTheme].clay);
     clay.setTool(tool);
     clay.setBrushSize(brushSize);
+    
+    // sync title color with clay color
+    updateTitleColor(clayColor);
 
-    // camera controls
     controls = new OrbitControls(cam, renderer.domElement);
     controls.enableDamping = true; 
     controls.enablePan = false;
@@ -156,6 +154,7 @@ function applyTheme() {
     clayColor = theme.clay;
     
     if (clay && clay.ball) clay.setColor(clayColor);
+    updateTitleColor(clayColor);
     
     setupLighting();
     updateColorButtons();
@@ -183,6 +182,20 @@ function setupTutorial() {
 function changeColor(name, val) {
     clayColor = val;
     if (clay) clay.setColor(val);
+    updateTitleColor(val);
+}
+
+function updateTitleColor(color) {
+    const title = document.querySelector('.banner h1');
+    if (title) {
+        const hexColor = '#' + color.toString(16).padStart(6, '0');
+        title.style.color = hexColor;
+        // update text shadow to match the color with reduced opacity
+        const r = (color >> 16) & 255;
+        const g = (color >> 8) & 255;
+        const b = color & 255;
+        title.style.textShadow = `0 0 20px rgba(${r}, ${g}, ${b}, 0.3)`;
+    }
 }
 
 function onKey(e) {
@@ -198,194 +211,183 @@ function onKey(e) {
     if (toolMap[e.key]) {
         tool = toolMap[e.key]; 
         if (clay) clay.setTool(tool);
-        // update buttons
-        document.querySelectorAll('.tool-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.textContent === tool) btn.classList.add('active');
-        });
-    }
-    
-    // bracket keys adjust brush size
-    if (e.key === '[') {
-        brushSize = Math.max(0.1, brushSize - 0.05); 
-        clay.setBrushSize(brushSize);
-        let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = brushSize;
-    }
-    if (e.key === ']') {
-        brushSize = Math.min(0.8, brushSize + 0.05); 
-        clay.setBrushSize(brushSize);
-        let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = brushSize;
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.tool-btn:nth-child(${Object.keys(toolMap).indexOf(e.key) + 1})`).classList.add('active');
     }
 }
 
 function reset() { 
-    if (clay) clay.resetClay(); 
+    if (clay) clay.reset(); 
 }
 
 function showTutorial() {
-    alert(`clayable
+    alert(`clayable - sculpt with your cursor
 
-SHIFT + drag = sculpt
-1-5 = tools (push/pull/smooth/pinch/inflate)
-[ ] = brush size
-r = reset | space = spin | t = themes
+controls:
+- click & drag: sculpt clay
+- scroll: zoom in/out
+- right click + drag: rotate camera
+- spacebar: auto-rotate
+- r: reset clay
+- t: switch theme
+- 1-5: select tools
 
-drag = rotate | wheel = zoom`);
+tools:
+- push: add clay
+- pull: remove clay  
+- smooth: smooth surface
+- pinch: pinch clay inward
+- inflate: puff out clay
+
+tips:
+- larger brush = bigger effect
+- hold shift for fine control
+- try different colors & themes!`);
 }
 
 function resize() {
-    if (cam && renderer) {
-        cam.aspect = window.innerWidth / window.innerHeight;
-        cam.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    if (!cam || !renderer) return;
+    cam.aspect = window.innerWidth / window.innerHeight;
+    cam.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// TODO: fix hover detection
-// function checkClayHover() {
-//     if (!clay || !clay.ball) return;
-//     raycaster.setFromCamera(mouse, cam);
-//     let hits = raycaster.intersectObject(clay.ball);
-    
-//     let wasOver = overClay;
-//     overClay = hits.length > 0;
-    
-//     let c = canvas.querySelector('canvas');
-//     if (!c) return;
-    
-//     if (overClay && !wasOver) c.style.cursor = 'crosshair';
-//     else if (!overClay && wasOver) c.style.cursor = 'grab';
-// }
+let touchStartPos = null;
 
 function onTouchStart(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
+        dragging = true;
         let touch = e.touches[0];
+        touchStartPos = { x: touch.clientX, y: touch.clientY };
+        
         mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        lastMouse.copy(mouse);
         
         raycaster.setFromCamera(mouse, cam);
-        let hits = raycaster.intersectObject(clay.ball);
+        let intersects = raycaster.intersectObject(clay.ball);
+        overClay = intersects.length > 0;
         
-        if (hits.length > 0) {
-            dragging = true; lastMouse.set(touch.clientX, touch.clientY);
-            sculpt(true);
-        }
-    } else if (e.touches.length === 2) {
-        dragging = false;
+        if (overClay) sculpt(true);
     }
 }
 
 function onTouchMove(e) {
     e.preventDefault();
-    if (e.touches.length === 1 && dragging) {
+    if (dragging && e.touches.length === 1) {
         let touch = e.touches[0];
         mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        let dx = touch.clientX - lastMouse.x, dy = touch.clientY - lastMouse.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
+        raycaster.setFromCamera(mouse, cam);
+        let intersects = raycaster.intersectObject(clay.ball);
+        overClay = intersects.length > 0;
         
-        if (dist > 5) {
-            sculpt(true); lastMouse.set(touch.clientX, touch.clientY);
-        }
+        if (overClay) sculpt(true);
+        lastMouse.copy(mouse);
     }
 }
 
 function onTouchEnd(e) { e.preventDefault(); dragging = false; }
 
 function sculpt(touch = false) {
-    if (!clay || !clay.ball) return;
-    raycaster.setFromCamera(mouse, cam);
-    let hits = raycaster.intersectObject(clay.ball);
+    if (!clay || !overClay) return;
     
-    if (hits.length > 0) {
-        let pt = hits[0].point;
-        let str = touch ? touchStr : moldStr;
-        clay.setStrength(str); 
-        clay.moldClay(pt.x, pt.y, pt.z, touch);
-
+    raycaster.setFromCamera(mouse, cam);
+    let intersects = raycaster.intersectObject(clay.ball);
+    if (intersects.length > 0) {
+        let point = intersects[0].point;
+        let normal = intersects[0].face.normal;
+        let strength = touch ? touchStr : moldStr;
+        clay.sculpt(point, normal, strength);
     }
 }
 
 function animate() {
     requestAnimationFrame(animate);
+    
+    if (autoSpin && !dragging) {
+        clay.ball.rotation.y += spinSpeed;
+    }
+    
     if (controls) controls.update();
-    if (autoSpin && clay && clay.ball) clay.ball.rotation.y += spinSpeed;
-    renderer.render(scene, cam);
+    if (renderer && scene && cam) renderer.render(scene, cam);
 }
 
 function setupEvents() {
-    if (!canvas) return;
-    let c = canvas.querySelector('canvas');
-    if (!c) return;
-    
-    // touch stuff
-    c.addEventListener('touchstart', onTouchStart);
-    c.addEventListener('touchmove', onTouchMove);
-    c.addEventListener('touchend', onTouchEnd);
-    
-    window.addEventListener('resize', resize);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', resize);
+    
+    window.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: false });
     
     setupSculptingMode();
 }
 
 function setupSculptingMode() {
-    let c = canvas.querySelector('canvas');
-    if (!c) return;
-    
-    let sculptMode = false;
-    let mouseDown = false;
-    
-    // shift = sculpt mode
-    window.addEventListener('keydown', function(e) {
-        if (e.key === 'Shift' && !sculptMode) {
-            sculptMode = true;
-            controls.enabled = false; // kill orbit controls
-            c.style.cursor = 'crosshair';
+    let isMouseDown = false;
+    let isDragging = false;
+    let dragThreshold = 3;
+    let startPos = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+            isMouseDown = true;
+            isDragging = false;
+            startPos.x = e.clientX;
+            startPos.y = e.clientY;
+            controls.enabled = false;
         }
     });
-    
-    window.addEventListener('keyup', function(e) {
-        if (e.key === 'Shift' && sculptMode) {
-            sculptMode = false;
-            mouseDown = false;
-            controls.enabled = true; // camera back on
-            c.style.cursor = 'grab';
+
+    renderer.domElement.addEventListener('mousemove', (e) => {
+        updateMouseAndSculpt(e);
+        
+        if (isMouseDown) {
+            let deltaX = Math.abs(e.clientX - startPos.x);
+            let deltaY = Math.abs(e.clientY - startPos.y);
+            
+            if (deltaX > dragThreshold || deltaY > dragThreshold) {
+                isDragging = true;
+            }
         }
     });
-    
-    // mouse stuff
-    c.addEventListener('mousedown', function(e) {
-        if (sculptMode && e.button === 0) {
-            mouseDown = true;
-            updateMouseAndSculpt(e);
+
+    renderer.domElement.addEventListener('mouseup', (e) => {
+        if (e.button === 0) {
+            isMouseDown = false;
+            dragging = false;
+            
+            setTimeout(() => {
+                controls.enabled = true;
+            }, 50);
         }
     });
-    
-    c.addEventListener('mousemove', function(e) {
-        if (sculptMode) {
-            updateMouseAndSculpt(e);
-        }
+
+    renderer.domElement.addEventListener('mouseleave', () => {
+        isMouseDown = false;
+        dragging = false;
+        controls.enabled = true;
     });
-    
-    c.addEventListener('mouseup', function(e) {
-        if (sculptMode && e.button === 0) {
-            mouseDown = false;
-        }
-    });
-    
+
+    renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
     function updateMouseAndSculpt(e) {
         mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         
-        if (mouseDown) {
+        raycaster.setFromCamera(mouse, cam);
+        let intersects = raycaster.intersectObject(clay.ball);
+        overClay = intersects.length > 0;
+        
+        if (isMouseDown && overClay) {
+            dragging = true;
             sculpt();
         }
     }
 }
 
-init();
+// start everything when page loads
+window.addEventListener('DOMContentLoaded', init);
