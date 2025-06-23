@@ -22,7 +22,7 @@ class ClaySculptor {
         this.scene.add(this.ball);
         
         this.verts = geom.attributes.position.array;
-        this.origPos = [...this.verts]; // copy for reset
+        this.origPos = [...this.verts]; // backup for reset
     }
 
     setTool(t) { this.tool = t; }
@@ -35,6 +35,7 @@ class ClaySculptor {
         let geom = this.ball.geometry;
         let verts = geom.attributes.position.array;
         
+        // check verts
         for (let i = 0; i < verts.length; i += 3) {
             let v = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2]);
             let dist = v.distanceTo(pos);
@@ -43,17 +44,19 @@ class ClaySculptor {
                 let factor = 1 - (dist / this.size);
                 factor = Math.pow(factor, 2); // smooth falloff
                 
-                this[this.tool](i, v, pos, factor, isTouch);
+                this[this.tool](i, v, pos, factor, isTouch); // call tool func
             }
         }
         
+        // update mesh
         geom.attributes.position.needsUpdate = true;
         geom.computeVertexNormals();
     }
 
     push(i, v, pt, factor, isTouch) {
+        // push in
         let dir = v.clone().normalize();
-        let amt = this.str * factor * (isTouch ? 2 : 1);
+        let amt = this.str * factor * (isTouch ? 4 : 3);
         
         this.verts[i] -= dir.x * amt;
         this.verts[i + 1] -= dir.y * amt;
@@ -61,8 +64,9 @@ class ClaySculptor {
     }
 
     pull(i, v, pt, factor, isTouch) {
+        // pull out 
         let dir = v.clone().normalize();
-        let amt = this.str * factor * (isTouch ? 2 : 1);
+        let amt = this.str * factor * (isTouch ? 5 : 4);
         
         this.verts[i] += dir.x * amt;
         this.verts[i + 1] += dir.y * amt;
@@ -70,17 +74,19 @@ class ClaySculptor {
     }
 
     smooth(i, v, pt, factor, isTouch) {
-        let target = v.clone().normalize().multiplyScalar(2);
-        let amt = this.str * factor * 0.5 * (isTouch ? 1.5 : 1);
+        // smooth to original
+        let original = new THREE.Vector3(this.origPos[i], this.origPos[i + 1], this.origPos[i + 2]);
+        let amt = this.str * factor * (isTouch ? 1.5 : 1) * 0.8;
         
-        this.verts[i] += (target.x - this.verts[i]) * amt;
-        this.verts[i + 1] += (target.y - this.verts[i + 1]) * amt;
-        this.verts[i + 2] += (target.z - this.verts[i + 2]) * amt;
+        this.verts[i] += (original.x - this.verts[i]) * amt;
+        this.verts[i + 1] += (original.y - this.verts[i + 1]) * amt;
+        this.verts[i + 2] += (original.z - this.verts[i + 2]) * amt;
     }
 
     pinch(i, v, pt, factor, isTouch) {
+        // pull to cursor
         let dir = pt.clone().sub(v).normalize();
-        let amt = this.str * factor * 1.5 * (isTouch ? 2 : 1);
+        let amt = this.str * factor * (isTouch ? 6 : 5);
         
         this.verts[i] += dir.x * amt;
         this.verts[i + 1] += dir.y * amt;
@@ -88,8 +94,9 @@ class ClaySculptor {
     }
 
     inflate(i, v, pt, factor, isTouch) {
+        // inflate like balloon
         let dir = v.clone().normalize();
-        let amt = this.str * factor * 0.8 * (isTouch ? 1.5 : 1);
+        let amt = this.str * factor * (isTouch ? 3 : 2);
         
         this.verts[i] += dir.x * amt;
         this.verts[i + 1] += dir.y * amt;
@@ -97,7 +104,7 @@ class ClaySculptor {
     }
 
     resetClay() {
-        // restore original positions
+        // reset to original
         for (let i = 0; i < this.verts.length; i++) {
             this.verts[i] = this.origPos[i];
         }

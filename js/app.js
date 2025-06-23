@@ -6,116 +6,66 @@ let canvas, cam, scene, renderer, controls;
 let mouse = new THREE.Vector2(), dragging = false, lastMouse = new THREE.Vector2();
 let clock = new THREE.Clock();
 
-let spin = false, spinSpd = 0.001;
+let autoSpin = false, spinSpeed = 0.001;
 let clayColor = 0xe8c291;
 
-let currentTheme = 'warm';
-let themes = {
-    warm: {
-        name: 'warm', bg: 0x1a1a1a, clay: 0xe8c291, title: '#e8c291',
-        lighting: {
-            ambient: { color: 0xffd4a3, intensity: 0.4 },
-            key: { color: 0xffb366, intensity: 0.9, pos: [8, 12, 6] },
-            fill: { color: 0xffe6cc, intensity: 0.3, pos: [-6, 3, 4] },
-            rim: { color: 0xff9933, intensity: 0.5, pos: [2, -5, 8] }
-        },
-        colors: { 'classic': 0xe8c291, 'terracotta': 0xd2691e, 'amber': 0xffbf00, 'copper': 0xb87333, 'sand': 0xc2b280, 'cream': 0xfffdd0 }
+let currentTheme = 0;
+let themes = [
+    { // warm
+        bg: 0x1a1a1a, clay: 0xe8c291, 
+        ambLight: 0xffd4a3, keyLight: 0xffb366,
+        colors: { 'clay': 0xe8c291, 'terra': 0xd2691e, 'amber': 0xffbf00, 'sand': 0xc2b280 }
     },
-    cool: {
-        name: 'cool', bg: 0x0f1419, clay: 0x7fb3d3, title: '#7fb3d3',
-        lighting: {
-            ambient: { color: 0xb3d9ff, intensity: 0.3 },
-            key: { color: 0x87ceeb, intensity: 0.8, pos: [10, 8, 7] },
-            fill: { color: 0xe0f6ff, intensity: 0.4, pos: [-8, 5, 3] },
-            rim: { color: 0x4682b4, intensity: 0.6, pos: [3, -8, 9] }
-        },
-        colors: { 'ice': 0xb8e6e6, 'steel': 0x708090, 'slate': 0x6c7b7f, 'mint': 0x98fb98, 'sage': 0x9caf88, 'pearl': 0xf8f8ff }
+    { // dark mode
+        bg: 0x0a0a0a, clay: 0x404040,
+        ambLight: 0x404040, keyLight: 0xffffff, 
+        colors: { 'grey': 0x404040, 'silver': 0xc0c0c0, 'iron': 0x464451, 'ash': 0x918e85 }
     },
-    dark: {
-        name: 'dark', bg: 0x0a0a0a, clay: 0x404040, title: '#888888',
-        lighting: {
-            ambient: { color: 0x404040, intensity: 0.2 },
-            key: { color: 0xffffff, intensity: 1.2, pos: [15, 15, 10] },
-            fill: { color: 0x666666, intensity: 0.2, pos: [-12, 8, 5] },
-            rim: { color: 0xcccccc, intensity: 0.8, pos: [5, -12, 12] }
-        },
-        colors: { 'charcoal': 0x36454f, 'graphite': 0x41424c, 'smoke': 0x738276, 'ash': 0x918e85, 'iron': 0x464451, 'silver': 0xc0c0c0 }
-    },
-    soft: {
-        name: 'soft', bg: 0x1c1b1f, clay: 0xd4a574, title: '#d4a574',
-        lighting: {
-            ambient: { color: 0xffeee6, intensity: 0.5 },
-            key: { color: 0xffd9cc, intensity: 0.7, pos: [6, 10, 8] },
-            fill: { color: 0xffe6f2, intensity: 0.5, pos: [-5, 6, 6] },
-            rim: { color: 0xffb3d9, intensity: 0.4, pos: [4, -6, 10] }
-        },
-        colors: { 'blush': 0xf4c2c2, 'peach': 0xffcba4, 'lavender': 0xe6e6fa, 'rose': 0xffc0cb, 'cream': 0xfdf6e3, 'powder': 0xb0c4de }
-    },
-    earth: {
-        name: 'earth', bg: 0x2c1810, clay: 0x8b4513, title: '#cd853f',
-        lighting: {
-            ambient: { color: 0xd4a574, intensity: 0.35 },
-            key: { color: 0xf4e4bc, intensity: 0.9, pos: [12, 14, 8] },
-            fill: { color: 0xb8860b, intensity: 0.4, pos: [-8, 6, 5] },
-            rim: { color: 0x8fbc8f, intensity: 0.3, pos: [6, -10, 12] }
-        },
-        colors: { 'clay': 0x8b4513, 'moss': 0x8a9a5b, 'forest': 0x355e3b, 'stone': 0x928e85, 'rust': 0xb7410e, 'bone': 0xf9f6ee }
-    },
-    ocean: {
-        name: 'ocean', bg: 0x0d1321, clay: 0x415a77, title: '#778da9',
-        lighting: {
-            ambient: { color: 0x4169e1, intensity: 0.25 },
-            key: { color: 0x87ceeb, intensity: 1.0, pos: [14, 12, 9] },
-            fill: { color: 0x00ced1, intensity: 0.35, pos: [-10, 7, 4] },
-            rim: { color: 0x20b2aa, intensity: 0.7, pos: [7, -9, 11] }
-        },
-        colors: { 'deep': 0x1d3557, 'wave': 0x457b9d, 'foam': 0xa8dadc, 'coral': 0xf1faee, 'tide': 0x778da9, 'shore': 0xe63946 }
+    { // blue theme - TODO: better colors
+        bg: 0x0f1419, clay: 0x7fb3d3,
+        ambLight: 0xb3d9ff, keyLight: 0x87ceeb,
+        colors: { 'blue': 0x7fb3d3, 'ice': 0xb8e6e6, 'steel': 0x708090, 'mint': 0x98fb98 }
     }
-};
+];
 
 let colors = themes[currentTheme].colors;
-let moldStr = 0.02, touchStr = 0.035, tool = 'push', size = 0.3;
+let moldStr = 0.05, touchStr = 0.08, tool = 'push', brushSize = 0.3;
 let clay; 
-let ambLight, keyLight, fillLight, rimLight;
-let overClay = false, raycaster = new THREE.Raycaster(), init = false;
+let ambLight, keyLight;
+let overClay = false, raycaster = new THREE.Raycaster(), initialized = false;
 
 function setupLighting() {
+    // clear old lights
     if (ambLight) scene.remove(ambLight);
     if (keyLight) scene.remove(keyLight);
-    if (fillLight) scene.remove(fillLight);
-    if (rimLight) scene.remove(rimLight);
     
-    let l = themes[currentTheme].lighting;
+    let theme = themes[currentTheme];
     
-    ambLight = new THREE.AmbientLight(l.ambient.color, l.ambient.intensity);
+    ambLight = new THREE.AmbientLight(theme.ambLight, 0.4);
     scene.add(ambLight);
     
-    keyLight = new THREE.DirectionalLight(l.key.color, l.key.intensity);
-    keyLight.position.set(...l.key.pos); keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 2048; keyLight.shadow.mapSize.height = 2048;
+    keyLight = new THREE.DirectionalLight(theme.keyLight, 0.8);
+    keyLight.position.set(8, 10, 6); 
+    keyLight.castShadow = true;
     scene.add(keyLight);
-    
-    fillLight = new THREE.DirectionalLight(l.fill.color, l.fill.intensity);
-    fillLight.position.set(...l.fill.pos); scene.add(fillLight);
-    
-    rimLight = new THREE.DirectionalLight(l.rim.color, l.rim.intensity);
-    rimLight.position.set(...l.rim.pos); scene.add(rimLight);
 }
 
 function init() {
-    if (init) return;
-    init = true;
+    if (initialized) return; // dont init twice lol
+    initialized = true;
     
     canvas = document.getElementById('canvas-container');
     if (!canvas) return;
     canvas.innerHTML = '';
 
+    // setup scene stuff
     scene = new THREE.Scene();
     scene.background = new THREE.Color(themes[currentTheme].bg);
     
     cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     cam.position.set(0, 0, 5); cam.lookAt(0, 0, 0);
 
+    // renderer stuff
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -124,12 +74,16 @@ function init() {
 
     setupLighting();
 
-    clay = new ClaySculptor(scene); clay.setColor(themes[currentTheme].clay);
+    // make clay ball
+    clay = new ClaySculptor(scene); 
+    clay.setColor(themes[currentTheme].clay);
+    clay.setTool(tool);
+    clay.setBrushSize(brushSize);
 
+    // camera controls
     controls = new OrbitControls(cam, renderer.domElement);
-    controls.enableDamping = true; controls.dampingFactor = 0.05;
-    controls.enableZoom = true; controls.enablePan = false;
-    controls.minDistance = 2; controls.maxDistance = 10;
+    controls.enableDamping = true; 
+    controls.enablePan = false;
 
     setupEvents(); makeUI(); setupTutorial();
     animate();
@@ -145,7 +99,6 @@ function makeUI() {
     Object.entries(colors).forEach(([name, val]) => {
         let btn = document.createElement('button');
         btn.className = 'color-btn';
-        btn.textContent = name;
         btn.style.backgroundColor = '#' + val.toString(16).padStart(6, '0');
         btn.onclick = () => changeColor(name, val);
         colorGrp.appendChild(btn);
@@ -173,8 +126,8 @@ function makeUI() {
     sizeLbl.className = 'size-label'; sizeLbl.textContent = 'size';
     let slider = document.createElement('input');
     slider.type = 'range'; slider.min = '0.1'; slider.max = '0.8'; slider.step = '0.1';
-    slider.value = size; slider.className = 'size-slider';
-    slider.oninput = (e) => { size = parseFloat(e.target.value); clay.setBrushSize(size); };
+    slider.value = brushSize; slider.className = 'size-slider';
+    slider.oninput = (e) => { brushSize = parseFloat(e.target.value); clay.setBrushSize(brushSize); };
     sizeGrp.appendChild(sizeLbl); sizeGrp.appendChild(slider);
     
     let moldGrp = document.createElement('div');
@@ -183,22 +136,16 @@ function makeUI() {
     let resetBtn = document.createElement('button');
     resetBtn.textContent = 'reset'; resetBtn.onclick = reset;
     
-    let helpBtn = document.createElement('button');
-    helpBtn.className = 'help-btn'; helpBtn.textContent = '?'; helpBtn.onclick = showTutorial;
-    
     let themeBtn = document.createElement('button');
     themeBtn.className = 'theme-btn'; themeBtn.textContent = 'theme'; themeBtn.onclick = switchTheme;
     
-    moldGrp.appendChild(resetBtn); moldGrp.appendChild(helpBtn); moldGrp.appendChild(themeBtn);
+    moldGrp.appendChild(resetBtn); moldGrp.appendChild(themeBtn);
     
     ctrl.appendChild(colorGrp); ctrl.appendChild(toolGrp); ctrl.appendChild(sizeGrp); ctrl.appendChild(moldGrp);
 }
 
 function switchTheme() {
-    let keys = Object.keys(themes);
-    let idx = keys.indexOf(currentTheme);
-    let next = (idx + 1) % keys.length;
-    currentTheme = keys[next];
+    currentTheme = (currentTheme + 1) % themes.length;
     applyTheme();
 }
 
@@ -209,9 +156,6 @@ function applyTheme() {
     clayColor = theme.clay;
     
     if (clay && clay.ball) clay.setColor(clayColor);
-    
-    let title = document.querySelector('.banner h1');
-    if (title) title.style.color = theme.title;
     
     setupLighting();
     updateColorButtons();
@@ -225,7 +169,6 @@ function updateColorButtons() {
     Object.keys(colors).forEach(name => {
         let colorBtn = document.createElement('button');
         colorBtn.className = 'color-btn';
-        colorBtn.textContent = name;
         colorBtn.style.backgroundColor = '#' + colors[name].toString(16).padStart(6, '0');
         colorBtn.onclick = () => changeColor(name, colors[name]);
         colorDiv.appendChild(colorBtn);
@@ -239,43 +182,41 @@ function setupTutorial() {
 
 function changeColor(name, val) {
     clayColor = val;
-    if (clay && clay.ball) clay.setColor(val);
-    
-    let titleEl = document.querySelector('.banner h1');
-    if (titleEl) {
-        titleEl.style.color = '#' + val.toString(16).padStart(6, '0');
-    }
+    if (clay) clay.setColor(val);
 }
 
 function onKey(e) {
     if (e.key.toLowerCase() === 'r') reset();
     if (e.key === ' ') {
         e.preventDefault(); 
-        spin = !spin;
+        autoSpin = !autoSpin; // toggle auto-spin
     }
     if (e.key.toLowerCase() === 't') switchTheme();
     
+    // number keys switch tools
     let toolMap = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
     if (toolMap[e.key]) {
         tool = toolMap[e.key]; 
         if (clay) clay.setTool(tool);
+        // update buttons
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.classList.remove('active');
             if (btn.textContent === tool) btn.classList.add('active');
         });
     }
     
+    // bracket keys adjust brush size
     if (e.key === '[') {
-        size = Math.max(0.1, size - 0.05); 
-        clay.setBrushSize(size);
+        brushSize = Math.max(0.1, brushSize - 0.05); 
+        clay.setBrushSize(brushSize);
         let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = size;
+        if (slider) slider.value = brushSize;
     }
     if (e.key === ']') {
-        size = Math.min(0.8, size + 0.05); 
-        clay.setBrushSize(size);
+        brushSize = Math.min(0.8, brushSize + 0.05); 
+        clay.setBrushSize(brushSize);
         let slider = document.querySelector('.size-slider');
-        if (slider) slider.value = size;
+        if (slider) slider.value = brushSize;
     }
 }
 
@@ -286,19 +227,12 @@ function reset() {
 function showTutorial() {
     alert(`clayable
 
-SCULPTING:
-SHIFT + drag - sculpt clay
-Tools: 1=push, 2=pull, 3=smooth, 4=pinch, 5=inflate
+SHIFT + drag = sculpt
+1-5 = tools (push/pull/smooth/pinch/inflate)
+[ ] = brush size
+r = reset | space = spin | t = themes
 
-CAMERA:
-drag - rotate view
-mouse wheel - zoom
-
-CONTROLS:
-[ ] - brush size
-r - reset clay
-space - auto spin
-t - switch themes`);
+drag = rotate | wheel = zoom`);
 }
 
 function resize() {
@@ -309,20 +243,21 @@ function resize() {
     }
 }
 
-function checkClayHover() {
-    if (!clay || !clay.ball) return;
-    raycaster.setFromCamera(mouse, cam);
-    let hits = raycaster.intersectObject(clay.ball);
+// TODO: fix hover detection
+// function checkClayHover() {
+//     if (!clay || !clay.ball) return;
+//     raycaster.setFromCamera(mouse, cam);
+//     let hits = raycaster.intersectObject(clay.ball);
     
-    let wasOver = overClay;
-    overClay = hits.length > 0;
+//     let wasOver = overClay;
+//     overClay = hits.length > 0;
     
-    let c = canvas.querySelector('canvas');
-    if (!c) return;
+//     let c = canvas.querySelector('canvas');
+//     if (!c) return;
     
-    if (overClay && !wasOver) c.style.cursor = 'crosshair';
-    else if (!overClay && wasOver) c.style.cursor = 'grab';
-}
+//     if (overClay && !wasOver) c.style.cursor = 'crosshair';
+//     else if (!overClay && wasOver) c.style.cursor = 'grab';
+// }
 
 function onTouchStart(e) {
     e.preventDefault();
@@ -371,13 +306,14 @@ function sculpt(touch = false) {
         let str = touch ? touchStr : moldStr;
         clay.setStrength(str); 
         clay.moldClay(pt.x, pt.y, pt.z, touch);
+
     }
 }
 
 function animate() {
     requestAnimationFrame(animate);
     if (controls) controls.update();
-    if (spin && clay && clay.ball) clay.ball.rotation.y += spinSpd;
+    if (autoSpin && clay && clay.ball) clay.ball.rotation.y += spinSpeed;
     renderer.render(scene, cam);
 }
 
@@ -408,7 +344,7 @@ function setupSculptingMode() {
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Shift' && !sculptMode) {
             sculptMode = true;
-            controls.enabled = false;
+            controls.enabled = false; // kill orbit controls
             c.style.cursor = 'crosshair';
         }
     });
@@ -417,12 +353,12 @@ function setupSculptingMode() {
         if (e.key === 'Shift' && sculptMode) {
             sculptMode = false;
             mouseDown = false;
-            controls.enabled = true;
+            controls.enabled = true; // camera back on
             c.style.cursor = 'grab';
         }
     });
     
-    // mouse handling
+    // mouse stuff
     c.addEventListener('mousedown', function(e) {
         if (sculptMode && e.button === 0) {
             mouseDown = true;
