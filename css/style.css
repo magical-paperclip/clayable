@@ -35,7 +35,7 @@ canvas:active { cursor: grabbing; }
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
     display: flex; gap: 25px; align-items: center; z-index: 10;
     background: rgba(0, 0, 0, 0.85); padding: 20px 30px;
-    border-radius: 15px; backdrop-filter: blur(10px);
+    border-radius: 15px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 
                 0 0 0 1px rgba(255, 255, 255, 0.05);

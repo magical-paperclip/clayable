@@ -77,7 +77,7 @@ let colors = themes[currentTheme].colors;
 let moldStr = 0.02, touchStr = 0.035, tool = 'push', size = 0.3;
 let clay; 
 let ambLight, keyLight, fillLight, rimLight;
-let overClay = false, raycaster = new THREE.Raycaster(), initialized = false;
+let overClay = false, raycaster = new THREE.Raycaster(), init = false;
 
 function setupLighting() {
     if (ambLight) scene.remove(ambLight);
@@ -103,8 +103,8 @@ function setupLighting() {
 }
 
 function init() {
-    if (initialized) return;
-    initialized = true;
+    if (init) return;
+    init = true;
     
     canvas = document.getElementById('canvas-container');
     if (!canvas) return;
@@ -250,13 +250,15 @@ function changeColor(name, val) {
 function onKey(e) {
     if (e.key.toLowerCase() === 'r') reset();
     if (e.key === ' ') {
-        e.preventDefault(); spin = !spin;
+        e.preventDefault(); 
+        spin = !spin;
     }
     if (e.key.toLowerCase() === 't') switchTheme();
     
     let toolMap = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
     if (toolMap[e.key]) {
-        tool = toolMap[e.key]; clay.setTool(tool);
+        tool = toolMap[e.key]; 
+        if (clay) clay.setTool(tool);
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.classList.remove('active');
             if (btn.textContent === tool) btn.classList.add('active');
@@ -264,38 +266,39 @@ function onKey(e) {
     }
     
     if (e.key === '[') {
-        size = Math.max(0.1, size - 0.05); clay.setBrushSize(size);
-        let sizeSlider = document.querySelector('.size-slider');
-        if (sizeSlider) sizeSlider.value = size;
+        size = Math.max(0.1, size - 0.05); 
+        clay.setBrushSize(size);
+        let slider = document.querySelector('.size-slider');
+        if (slider) slider.value = size;
     }
     if (e.key === ']') {
-        size = Math.min(0.8, size + 0.05); clay.setBrushSize(size);
-        let sizeSlider = document.querySelector('.size-slider');
-        if (sizeSlider) sizeSlider.value = size;
+        size = Math.min(0.8, size + 0.05); 
+        clay.setBrushSize(size);
+        let slider = document.querySelector('.size-slider');
+        if (slider) slider.value = size;
     }
 }
 
-function reset() { if (clay) clay.resetClay(); }
+function reset() { 
+    if (clay) clay.resetClay(); 
+}
 
 function showTutorial() {
     alert(`clayable
 
-drag to sculpt clay
+SCULPTING:
+SHIFT + drag - sculpt clay
+Tools: 1=push, 2=pull, 3=smooth, 4=pinch, 5=inflate
+
+CAMERA:
+drag - rotate view
 mouse wheel - zoom
-right click drag - rotate
 
-tools:
-1 - push (makes dents)
-2 - pull (pulls out)  
-3 - smooth 
-4 - pinch (sharp)
-5 - inflate
-
-keys:
-[ ] - size
-r - reset
-space - spin
-t - themes`);
+CONTROLS:
+[ ] - brush size
+r - reset clay
+space - auto spin
+t - switch themes`);
 }
 
 function resize() {
@@ -304,13 +307,6 @@ function resize() {
         cam.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     }
-}
-
-function onMouseMove(e) {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    checkClayHover();
-    if (dragging) sculpt();
 }
 
 function checkClayHover() {
@@ -328,37 +324,14 @@ function checkClayHover() {
     else if (!overClay && wasOver) c.style.cursor = 'grab';
 }
 
-function onMouseDown(e) {
-    let c = canvas.querySelector('canvas');
-    
-    if (overClay && e.button === 0) {
-        e.preventDefault(); dragging = true;
-        lastMouse.set(e.clientX, e.clientY);
-        if (c) c.style.cursor = 'crosshair';
-        sculpt();
-    } else {
-        if (c) c.style.cursor = 'grabbing';
-    }
-}
-
-function onMouseUp(e) {
-    dragging = false;
-    let c = canvas.querySelector('canvas');
-    if (overClay) {
-        if (c) c.style.cursor = 'crosshair';
-    } else {
-        if (c) c.style.cursor = 'grab';
-    }
-}
-
 function onTouchStart(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
         let touch = e.touches[0];
-        mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
-        mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
-        raycaster.setFromCamera(mousePos, cam);
+        raycaster.setFromCamera(mouse, cam);
         let hits = raycaster.intersectObject(clay.ball);
         
         if (hits.length > 0) {
@@ -374,8 +347,8 @@ function onTouchMove(e) {
     e.preventDefault();
     if (e.touches.length === 1 && dragging) {
         let touch = e.touches[0];
-        mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
-        mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         
         let dx = touch.clientX - lastMouse.x, dy = touch.clientY - lastMouse.y;
         let dist = Math.sqrt(dx * dx + dy * dy);
@@ -390,13 +363,14 @@ function onTouchEnd(e) { e.preventDefault(); dragging = false; }
 
 function sculpt(touch = false) {
     if (!clay || !clay.ball) return;
-    raycaster.setFromCamera(mousePos, cam);
+    raycaster.setFromCamera(mouse, cam);
     let hits = raycaster.intersectObject(clay.ball);
     
     if (hits.length > 0) {
         let pt = hits[0].point;
         let str = touch ? touchStr : moldStr;
-        clay.setStrength(str); clay.moldClay(pt.x, pt.y, pt.z, touch);
+        clay.setStrength(str); 
+        clay.moldClay(pt.x, pt.y, pt.z, touch);
     }
 }
 
@@ -412,15 +386,70 @@ function setupEvents() {
     let c = canvas.querySelector('canvas');
     if (!c) return;
     
-    c.addEventListener('mousemove', onMouseMove);
-    c.addEventListener('mousedown', onMouseDown);
-    c.addEventListener('mouseup', onMouseUp);
+    // touch stuff
     c.addEventListener('touchstart', onTouchStart);
     c.addEventListener('touchmove', onTouchMove);
     c.addEventListener('touchend', onTouchEnd);
     
     window.addEventListener('resize', resize);
     window.addEventListener('keydown', onKey);
+    
+    setupSculptingMode();
+}
+
+function setupSculptingMode() {
+    let c = canvas.querySelector('canvas');
+    if (!c) return;
+    
+    let sculptMode = false;
+    let mouseDown = false;
+    
+    // shift = sculpt mode
+    window.addEventListener('keydown', function(e) {
+        if (e.key === 'Shift' && !sculptMode) {
+            sculptMode = true;
+            controls.enabled = false;
+            c.style.cursor = 'crosshair';
+        }
+    });
+    
+    window.addEventListener('keyup', function(e) {
+        if (e.key === 'Shift' && sculptMode) {
+            sculptMode = false;
+            mouseDown = false;
+            controls.enabled = true;
+            c.style.cursor = 'grab';
+        }
+    });
+    
+    // mouse handling
+    c.addEventListener('mousedown', function(e) {
+        if (sculptMode && e.button === 0) {
+            mouseDown = true;
+            updateMouseAndSculpt(e);
+        }
+    });
+    
+    c.addEventListener('mousemove', function(e) {
+        if (sculptMode) {
+            updateMouseAndSculpt(e);
+        }
+    });
+    
+    c.addEventListener('mouseup', function(e) {
+        if (sculptMode && e.button === 0) {
+            mouseDown = false;
+        }
+    });
+    
+    function updateMouseAndSculpt(e) {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        
+        if (mouseDown) {
+            sculpt();
+        }
+    }
 }
 
 init();

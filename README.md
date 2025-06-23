@@ -15,9 +15,10 @@ just open https://clayable.vercel.app and start sculpting
 
 ## controls
 
-- mouse/touch: sculpt clay
+- hold SHIFT + drag: sculpt clay
+- drag: rotate view
 - mouse wheel: zoom
-- right-click + drag: rotate view
+- touch: sculpt on mobile
 - keys 1-5: switch tools
 - [ ] keys: brush size
 - r: reset clay
