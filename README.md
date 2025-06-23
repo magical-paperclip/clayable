@@ -40,27 +40,11 @@ the tricky part was getting the falloff curves right so it feels natural and not
 go to https://clayable.vercel.app in your browser
 
 
-## challenges
+## additions (soonTM)
 
-- performance on mobile was tricky - i had to balance sphere resolution vs frame rate
-- getting touch events to feel responsive without being too sensitive 
-- preventing camera rotation while sculpting (fixed it w proper event handling)
-- making each tool feel distinctly different - took lots of tweaking strength values
-- falloff curves that looked smooth instead of chunky or artificial
-- cross-browser compatibility with webgl and touch events
-
-## what i learned
-
-- vertex manipulation was way more math than expected but super satisfying when it works
-- mobile users need bigger visual feedback
-- documentation and comments are important when you come back to complex math later
-
-## additions
-
-- save/load sculptures to localStorage 
 - undo/redo system for mistakes
 - more sculpting tools (flatten, grab, etc)
 - texture painting on top of sculpting
 - export to .obj or .stl files
-- multiplayer collaborative sculpting
+- multiuser collabortive sculpting
 - procedural clay textures for more realism

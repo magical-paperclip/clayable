@@ -217,7 +217,7 @@ function onKey(e) {
 }
 
 function reset() { 
-    if (clay) clay.reset(); 
+    if (clay) clay.resetClay(); 
 }
 
 function showTutorial() {
@@ -298,9 +298,7 @@ function sculpt(touch = false) {
     let intersects = raycaster.intersectObject(clay.ball);
     if (intersects.length > 0) {
         let point = intersects[0].point;
-        let normal = intersects[0].face.normal;
-        let strength = touch ? touchStr : moldStr;
-        clay.sculpt(point, normal, strength);
+        clay.moldClay(point.x, point.y, point.z, touch);
     }
 }
 
