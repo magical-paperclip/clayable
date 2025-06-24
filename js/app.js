@@ -280,7 +280,10 @@ function onTouchStart(e) {
         raycaster.setFromCamera(mouse, cam);
         let hits = raycaster.intersectObject(clay.ball);
         
-        if (hits.length > 0) sculpt(true);
+        if (hits.length > 0) {
+            let pt = hits[0].point;
+            clay.moldClay(pt.x, pt.y, pt.z, true);
+        }
     }
 }
 
@@ -293,22 +296,18 @@ function onTouchMove(e) {
         mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
         
-        sculpt(true);
+        raycaster.setFromCamera(mouse, cam);
+        let hits = raycaster.intersectObject(clay.ball);
+        if (hits.length > 0) {
+            let pt = hits[0].point;
+            clay.moldClay(pt.x, pt.y, pt.z, true);
+        }
     }
 }
 
 function onTouchEnd(e) { e.preventDefault(); dragging = false; }
 
-function sculpt(touch = false) {
-    if (!clay) return;
-    
-    raycaster.setFromCamera(mouse, cam);
-    let hits = raycaster.intersectObject(clay.ball);
-    if (hits.length > 0) {
-        let pt = hits[0].point;
-        clay.moldClay(pt.x, pt.y, pt.z, touch);
-    }
-}
+
 
 function animate() {
     requestAnimationFrame(animate);
@@ -339,12 +338,18 @@ function setupSculptingMode() {
             mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
             
+            console.log('click at:', e.clientX, e.clientY, 'normalized:', mouse.x, mouse.y);
+            
             raycaster.setFromCamera(mouse, cam);
             let hits = raycaster.intersectObject(clay.ball);
             
             if (hits.length > 0) {
                 sculpting = true;
-                sculpt();
+                let pt = hits[0].point;
+                console.log('hit point:', pt.x, pt.y, pt.z);
+                clay.moldClay(pt.x, pt.y, pt.z, false);
+            } else {
+                console.log('no hit detected');
             }
         }
     });
@@ -354,7 +359,13 @@ function setupSculptingMode() {
             let rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            sculpt();
+            
+            raycaster.setFromCamera(mouse, cam);
+            let hits = raycaster.intersectObject(clay.ball);
+            if (hits.length > 0) {
+                let pt = hits[0].point;
+                clay.moldClay(pt.x, pt.y, pt.z, false);
+            }
         }
     });
 
