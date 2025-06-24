@@ -9,26 +9,21 @@ let clock = new THREE.Clock();
 let autoSpin = false, spinSpeed = 0.001;
 let clayColor = 0xe8c291;
 
-let currentTheme = 0;
-let themes = [
-    { // warm theme
-        bg: 0x1a1a1a, clay: 0xe8c291, 
-        ambLight: 0xffd4a3, keyLight: 0xffb366,
-        colors: { 'clay': 0xe8c291, 'terra': 0xd2691e, 'amber': 0xffbf00, 'sand': 0xc2b280 }
+let isDarkMode = true;
+let themes = {
+    light: {
+        bg: 0xf5f5f5, clay: 0xd2691e, 
+        ambLight: 0xffffff, keyLight: 0xffd700,
+        colors: { 'terra': 0xd2691e, 'coral': 0xff7f50, 'salmon': 0xfa8072, 'peach': 0xffcba4 }
     },
-    { // dark mode
-        bg: 0x0a0a0a, clay: 0x404040,
+    dark: {
+        bg: 0x0a0a0a, clay: 0xe8c291,
         ambLight: 0x404040, keyLight: 0xffffff, 
-        colors: { 'grey': 0x404040, 'silver': 0xc0c0c0, 'iron': 0x464451, 'ash': 0x918e85 }
-    },
-    { // blue theme
-        bg: 0x0f1419, clay: 0x7fb3d3,
-        ambLight: 0xb3d9ff, keyLight: 0x87ceeb,
-        colors: { 'blue': 0x7fb3d3, 'ice': 0xb8e6e6, 'steel': 0x708090, 'mint': 0x98fb98 }
+        colors: { 'clay': 0xe8c291, 'terra': 0xd2691e, 'amber': 0xffbf00, 'sand': 0xc2b280 }
     }
-];
+};
 
-let colors = themes[currentTheme].colors;
+let colors = themes[isDarkMode ? 'dark' : 'light'].colors;
 let moldStr = 0.05, touchStr = 0.08, tool = 'push', brushSize = 0.3;
 let clay; 
 let ambLight, keyLight;
@@ -38,7 +33,7 @@ function setupLighting() {
     if (ambLight) scene.remove(ambLight);
     if (keyLight) scene.remove(keyLight);
     
-    let theme = themes[currentTheme];
+    let theme = themes[isDarkMode ? 'dark' : 'light'];
     
     ambLight = new THREE.AmbientLight(theme.ambLight, 0.4);
     scene.add(ambLight);
@@ -58,7 +53,7 @@ function init() {
     canvas.innerHTML = '';
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(themes[currentTheme].bg);
+    scene.background = new THREE.Color(themes[isDarkMode ? 'dark' : 'light'].bg);
     
     cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     cam.position.set(0, 0, 5); cam.lookAt(0, 0, 0);
@@ -72,16 +67,22 @@ function init() {
     setupLighting();
 
     clay = new ClaySculptor(scene); 
-    clay.setColor(themes[currentTheme].clay);
+    clay.setColor(themes[isDarkMode ? 'dark' : 'light'].clay);
     clay.setTool(tool);
     clay.setBrushSize(brushSize);
     
-    // sync title color with clay color
     updateTitleColor(clayColor);
 
     controls = new OrbitControls(cam, renderer.domElement);
     controls.enableDamping = true; 
     controls.enablePan = false;
+    
+    // only middle mouse for camera, left is for sculpting
+    controls.mouseButtons = {
+        LEFT: null,  
+        MIDDLE: THREE.MOUSE.ROTATE,  
+        RIGHT: THREE.MOUSE.ROTATE    
+    };
 
     setupEvents(); makeUI(); setupTutorial();
     animate();
@@ -135,20 +136,25 @@ function makeUI() {
     resetBtn.textContent = 'reset'; resetBtn.onclick = reset;
     
     let themeBtn = document.createElement('button');
-    themeBtn.className = 'theme-btn'; themeBtn.textContent = 'theme'; themeBtn.onclick = switchTheme;
+    themeBtn.className = 'theme-btn'; 
+    themeBtn.textContent = isDarkMode ? '☀️ light' : '🌙 dark'; 
+    themeBtn.onclick = toggleDarkMode;
     
     moldGrp.appendChild(resetBtn); moldGrp.appendChild(themeBtn);
     
     ctrl.appendChild(colorGrp); ctrl.appendChild(toolGrp); ctrl.appendChild(sizeGrp); ctrl.appendChild(moldGrp);
 }
 
-function switchTheme() {
-    currentTheme = (currentTheme + 1) % themes.length;
+function toggleDarkMode() {
+    isDarkMode = !isDarkMode;
     applyTheme();
+    
+    let themeBtn = document.querySelector('.theme-btn');
+    if (themeBtn) themeBtn.textContent = isDarkMode ? '☀️ light' : '🌙 dark';
 }
 
 function applyTheme() {
-    let theme = themes[currentTheme];
+    let theme = themes[isDarkMode ? 'dark' : 'light'];
     scene.background = new THREE.Color(theme.bg);
     colors = theme.colors;
     clayColor = theme.clay;
@@ -158,6 +164,15 @@ function applyTheme() {
     
     setupLighting();
     updateColorButtons();
+    updatePageStyles();
+}
+
+function updatePageStyles() {
+    document.body.style.background = isDarkMode ? '#0a0a0a' : '#f5f5f5';
+    document.body.style.color = isDarkMode ? '#fff' : '#333';
+    
+    let subtitle = document.querySelector('.banner p');
+    if (subtitle) subtitle.style.color = isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)';
 }
 
 function updateColorButtons() {
@@ -166,11 +181,11 @@ function updateColorButtons() {
     colorDiv.innerHTML = '';
     
     Object.keys(colors).forEach(name => {
-        let colorBtn = document.createElement('button');
-        colorBtn.className = 'color-btn';
-        colorBtn.style.backgroundColor = '#' + colors[name].toString(16).padStart(6, '0');
-        colorBtn.onclick = () => changeColor(name, colors[name]);
-        colorDiv.appendChild(colorBtn);
+        let btn = document.createElement('button');
+        btn.className = 'color-btn';
+        btn.style.backgroundColor = '#' + colors[name].toString(16).padStart(6, '0');
+        btn.onclick = () => changeColor(name, colors[name]);
+        colorDiv.appendChild(btn);
     });
 }
 
@@ -190,7 +205,7 @@ function updateTitleColor(color) {
     if (title) {
         const hexColor = '#' + color.toString(16).padStart(6, '0');
         title.style.color = hexColor;
-        // update text shadow to match the color with reduced opacity
+        
         const r = (color >> 16) & 255;
         const g = (color >> 8) & 255;
         const b = color & 255;
@@ -204,9 +219,8 @@ function onKey(e) {
         e.preventDefault(); 
         autoSpin = !autoSpin; // toggle auto-spin
     }
-    if (e.key.toLowerCase() === 't') switchTheme();
+    if (e.key.toLowerCase() === 't') toggleDarkMode();
     
-    // number keys switch tools
     let toolMap = {'1': 'push', '2': 'pull', '3': 'smooth', '4': 'pinch', '5': 'inflate'};
     if (toolMap[e.key]) {
         tool = toolMap[e.key]; 
@@ -224,12 +238,12 @@ function showTutorial() {
     alert(`clayable - sculpt with your cursor
 
 controls:
-- click & drag: sculpt clay
+- left click + drag: sculpt clay
+- middle/right click + drag: rotate camera
 - scroll: zoom in/out
-- right click + drag: rotate camera
 - spacebar: auto-rotate
 - r: reset clay
-- t: switch theme
+- t: switch light/dark mode
 - 1-5: select tools
 
 tools:
@@ -241,7 +255,6 @@ tools:
 
 tips:
 - larger brush = bigger effect
-- hold shift for fine control
 - try different colors & themes!`);
 }
 
@@ -259,17 +272,15 @@ function onTouchStart(e) {
     if (e.touches.length === 1) {
         dragging = true;
         let touch = e.touches[0];
-        touchStartPos = { x: touch.clientX, y: touch.clientY };
+        let rect = renderer.domElement.getBoundingClientRect();
         
-        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-        lastMouse.copy(mouse);
+        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
         
         raycaster.setFromCamera(mouse, cam);
-        let intersects = raycaster.intersectObject(clay.ball);
-        overClay = intersects.length > 0;
+        let hits = raycaster.intersectObject(clay.ball);
         
-        if (overClay) sculpt(true);
+        if (hits.length > 0) sculpt(true);
     }
 }
 
@@ -277,37 +288,32 @@ function onTouchMove(e) {
     e.preventDefault();
     if (dragging && e.touches.length === 1) {
         let touch = e.touches[0];
-        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        let rect = renderer.domElement.getBoundingClientRect();
         
-        raycaster.setFromCamera(mouse, cam);
-        let intersects = raycaster.intersectObject(clay.ball);
-        overClay = intersects.length > 0;
+        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
         
-        if (overClay) sculpt(true);
-        lastMouse.copy(mouse);
+        sculpt(true);
     }
 }
 
 function onTouchEnd(e) { e.preventDefault(); dragging = false; }
 
 function sculpt(touch = false) {
-    if (!clay || !overClay) return;
+    if (!clay) return;
     
     raycaster.setFromCamera(mouse, cam);
-    let intersects = raycaster.intersectObject(clay.ball);
-    if (intersects.length > 0) {
-        let point = intersects[0].point;
-        clay.moldClay(point.x, point.y, point.z, touch);
+    let hits = raycaster.intersectObject(clay.ball);
+    if (hits.length > 0) {
+        let pt = hits[0].point;
+        clay.moldClay(pt.x, pt.y, pt.z, touch);
     }
 }
 
 function animate() {
     requestAnimationFrame(animate);
     
-    if (autoSpin && !dragging) {
-        clay.ball.rotation.y += spinSpeed;
-    }
+    if (autoSpin && !dragging) clay.ball.rotation.y += spinSpeed;
     
     if (controls) controls.update();
     if (renderer && scene && cam) renderer.render(scene, cam);
@@ -325,67 +331,44 @@ function setupEvents() {
 }
 
 function setupSculptingMode() {
-    let isMouseDown = false;
-    let isDragging = false;
-    let dragThreshold = 3;
-    let startPos = { x: 0, y: 0 };
+    let sculpting = false;
 
     renderer.domElement.addEventListener('mousedown', (e) => {
         if (e.button === 0) {
-            isMouseDown = true;
-            isDragging = false;
-            startPos.x = e.clientX;
-            startPos.y = e.clientY;
-            controls.enabled = false;
-        }
-    });
-
-    renderer.domElement.addEventListener('mousemove', (e) => {
-        updateMouseAndSculpt(e);
-        
-        if (isMouseDown) {
-            let deltaX = Math.abs(e.clientX - startPos.x);
-            let deltaY = Math.abs(e.clientY - startPos.y);
+            let rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
             
-            if (deltaX > dragThreshold || deltaY > dragThreshold) {
-                isDragging = true;
+            raycaster.setFromCamera(mouse, cam);
+            let hits = raycaster.intersectObject(clay.ball);
+            
+            if (hits.length > 0) {
+                sculpting = true;
+                sculpt();
             }
         }
     });
 
-    renderer.domElement.addEventListener('mouseup', (e) => {
+    renderer.domElement.addEventListener('mousemove', (e) => {
+        if (sculpting) {
+            let rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            sculpt();
+        }
+    });
+
+          renderer.domElement.addEventListener('mouseup', (e) => {
         if (e.button === 0) {
-            isMouseDown = false;
-            dragging = false;
-            
-            setTimeout(() => {
-                controls.enabled = true;
-            }, 50);
+            sculpting = false;
         }
     });
 
     renderer.domElement.addEventListener('mouseleave', () => {
-        isMouseDown = false;
-        dragging = false;
-        controls.enabled = true;
+        sculpting = false;
     });
 
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    function updateMouseAndSculpt(e) {
-        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-        
-        raycaster.setFromCamera(mouse, cam);
-        let intersects = raycaster.intersectObject(clay.ball);
-        overClay = intersects.length > 0;
-        
-        if (isMouseDown && overClay) {
-            dragging = true;
-            sculpt();
-        }
-    }
 }
 
-// start everything when page loads
 window.addEventListener('DOMContentLoaded', init);

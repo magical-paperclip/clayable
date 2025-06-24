@@ -5,6 +5,7 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #0a0a0a; color: #fff; overflow: hidden;
     user-select: none; -webkit-user-select: none;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #canvas-container { 
@@ -24,6 +25,12 @@ canvas:active { cursor: grabbing; }
     font-size: 2.2rem; font-weight: 700; letter-spacing: 3px;
     color: #e8c291; text-shadow: 0 0 20px rgba(232, 194, 145, 0.3);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.banner p {
+    font-size: 0.9rem; margin-top: 5px; 
+    color: rgba(255,255,255,0.7);
+    transition: color 0.3s ease;
 }
 .banner h1:hover { 
     transform: scale(1.05); 
