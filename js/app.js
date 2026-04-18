@@ -11,8 +11,12 @@ const spinSpeed = 0.001;
 let exporter = null;
 
 const VOID_BG = 0x000000;
-const CAMERA_NEAR = 0.01;
+/** Tight near plane for macro sculpting (avoids front clipping when zoomed in). */
+const CAMERA_NEAR = 0.001;
 const ABOUT_SIGNATURE = 'clayable v2.1 / built by prakruti / curated by wonder';
+
+/** Discord invite — set to your server’s discord.gg/… link. */
+const DISCORD_COMMUNITY_URL = 'https://discord.gg/wUAxP3YDv8';
 
 const GALLERY_BG = 0xf5f5f5;
 
@@ -130,7 +134,7 @@ function setupLighting() {
     keyLight.shadow.camera.right = 10;
     keyLight.shadow.camera.top = 10;
     keyLight.shadow.camera.bottom = -10;
-    keyLight.shadow.bias = -0.0008;
+    keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
 
     rimLight = new THREE.DirectionalLight(t.rimColor, t.rimIntensity);
@@ -236,6 +240,8 @@ function init() {
     renderer.setClearColor(themes.dark.clear, 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    /** @note Three.js reads shadow bias from each light; this mirrors common presets for macro zoom stability. */
+    renderer.shadowMap.bias = -0.0001;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
@@ -260,7 +266,8 @@ function init() {
     controls = new OrbitControls(cam, renderer.domElement);
     controls.enableDamping = true;
     controls.enablePan = false;
-    controls.minDistance = 0.75;
+    const clayRadius = clay.ball.geometry.parameters.radius;
+    controls.minDistance = Math.max(0.5, clayRadius * 1.03);
     controls.maxDistance = 15;
     controls.mouseButtons = {
         LEFT: THREE.MOUSE.ROTATE,
@@ -401,7 +408,7 @@ function setupChrome() {
         cluster = document.createElement('div');
         cluster.id = 'chrome-cluster';
         cluster.className = 'chrome-cluster';
-        cluster.setAttribute('aria-label', 'help and theme');
+        cluster.setAttribute('aria-label', 'help, community, and theme');
         document.body.appendChild(cluster);
     }
 
@@ -417,6 +424,40 @@ function setupChrome() {
         cluster.appendChild(help);
     } else if (help.parentElement !== cluster) {
         cluster.appendChild(help);
+    }
+
+    let community = document.getElementById('community-link');
+    if (!community) {
+        community = document.createElement('a');
+        community.href = DISCORD_COMMUNITY_URL;
+        community.target = '_blank';
+        community.rel = 'noopener noreferrer';
+        community.id = 'community-link';
+        community.className = 'chrome-anchor chrome-anchor--community';
+        community.setAttribute('aria-label', 'community — opens discord in a new tab');
+
+        const label = document.createElement('span');
+        label.className = 'chrome-community__label';
+        label.textContent = 'community';
+
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'chrome-community__icon');
+        icon.setAttribute('viewBox', '0 0 24 24');
+        icon.setAttribute('width', '14');
+        icon.setAttribute('height', '14');
+        icon.setAttribute('aria-hidden', 'true');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('fill', 'currentColor');
+        path.setAttribute(
+            'd',
+            'M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z'
+        );
+        icon.appendChild(path);
+        community.appendChild(label);
+        community.appendChild(icon);
+        help.insertAdjacentElement('afterend', community);
+    } else if (community.parentElement !== cluster) {
+        help.insertAdjacentElement('afterend', community);
     }
 
     let themeBtn = document.getElementById('theme-toggle');
@@ -474,6 +515,7 @@ function showHelpModal() {
                 <li>refine mesh: f</li>
                 <li>modes: push pull smooth pick inflate (left bar or keys 1–5)</li>
                 <li>gallery light / studio dark: t or light · beside help</li>
+                <li>community: link beside ? (opens in new tab)</li>
             </ul>
             <button type="button" class="info-dismiss">close</button>
         </div>

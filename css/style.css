@@ -96,12 +96,14 @@ body[data-theme="light"] .studio-toast {
 }
 
 body[data-theme="light"] .chrome-cluster .chrome-anchor--help,
+body[data-theme="light"] .chrome-cluster .chrome-anchor--community,
 body[data-theme="light"] .chrome-cluster .chrome-anchor--theme {
     color: #000000;
     opacity: 0.4;
 }
 
 body[data-theme="light"] .chrome-cluster .chrome-anchor--help:hover,
+body[data-theme="light"] .chrome-cluster .chrome-anchor--community:hover,
 body[data-theme="light"] .chrome-cluster .chrome-anchor--theme:hover {
     opacity: 1;
 }
@@ -206,7 +208,7 @@ canvas:active {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 2px;
+    gap: 6px;
 }
 
 .chrome-cluster .chrome-anchor--help {
@@ -228,6 +230,41 @@ canvas:active {
     opacity: 1;
     text-decoration: underline;
     text-underline-offset: 4px;
+}
+
+/* community / discord — text on desktop, icon only on narrow screens */
+.chrome-cluster .chrome-anchor--community {
+    position: static;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 6px;
+    margin: -12px -2px -12px 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: var(--track);
+    text-transform: lowercase;
+    color: #ffffff;
+    text-decoration: none;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.chrome-cluster .chrome-anchor--community:hover {
+    opacity: 1;
+}
+
+.chrome-cluster .chrome-anchor--community:hover .chrome-community__label {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.chrome-community__icon {
+    display: none;
+    flex-shrink: 0;
 }
 
 .chrome-anchor--theme {
@@ -872,11 +909,34 @@ body[data-theme="light"] .studio-slider:hover::-moz-range-thumb {
     .chrome-cluster {
         bottom: 30px;
         left: 30px;
+        gap: 4px;
+    }
+
+    .chrome-community__label {
+        display: none;
+    }
+
+    .chrome-community__icon {
+        display: block;
+    }
+
+    .chrome-cluster .chrome-anchor--community {
+        opacity: 0.3;
+        padding: 14px 8px;
+        margin: -14px -4px -14px 0;
+    }
+
+    .chrome-cluster .chrome-anchor--community:hover {
+        opacity: 1;
+    }
+
+    body[data-theme="light"] .chrome-cluster .chrome-anchor--community {
+        opacity: 0.3;
     }
 
     .studio-signature-wrap {
         bottom: 30px;
         right: 30px;
-        max-width: min(200px, calc(100vw - 72px));
+        max-width: min(180px, calc(100vw - 96px));
     }
 }
