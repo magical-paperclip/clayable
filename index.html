@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
     <title>clayable</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="banner">
-        <h1>clayable</h1>
-        <p>sculpt with your cursor</p>
-    </div>
-    
-    <button class="tutorial-btn" id="tutorial-btn">?</button>
-    
-    <div id="canvas-container"></div>
-    <div class="controls"></div>
-    
-    <script type="module" src="js/app.js?v=124"></script>
+    <div id="canvas-container" class="studio-canvas-host"></div>
+    <div class="studio-vignette" aria-hidden="true"></div>
+    <aside id="studio-toolbar" class="studio-toolbar" aria-label="sculpt mode"></aside>
+    <aside id="studio-palette" class="studio-palette" aria-label="materials"></aside>
+    <div class="controls studio-dock" id="studio-dock" aria-label="settings"></div>
+    <button type="button" id="about-btn" class="chrome-anchor chrome-anchor--about" aria-label="about clayable">clayable v2.0 / built by prakruti / curated by wonder</button>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>

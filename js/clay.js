@@ -2,113 +2,406 @@ import * as THREE from './three.module.js';
 
 class ClaySculptor {
     constructor(scene) {
-        this.scene = scene; 
-        this.tool = 'push'; 
-        this.size = 0.8; 
-        this.str = 0.15; // way better than the old 0.02 lol
-        this.ball = null; 
-        this.verts = []; 
+        this.scene = scene;
+        this.tool = 'pull';
+        this.size = 0.8;
+        this.str = 0.15;
+        this.ball = null;
+        this.verts = [];
         this.origPos = [];
+        this.replayPlaybackActive = false;
+        this.sculptHistoryTarget = null;
+        this.sculptResponse = 1;
+        this.physicalMaterialId = 'wetClay';
+        this.neighborList = [];
+        this.sphereSegW = 256;
+        this.sphereSegH = 256;
+        /** grab / drag: brush delta per moldClay call */
+        this._pickLastWorld = null;
+        this._pickDelta = new THREE.Vector3(0, 0, 0);
+        /** snapshot of normals at stroke start (inflate) */
+        this._snNormals = null;
         this.make();
     }
 
-    make() {
-        // high res sphere - 64x32 is sweet spot for sculpting
-        let geom = new THREE.SphereGeometry(2, 64, 32);
-        let mat = new THREE.MeshLambertMaterial({ color: 0xe8c291 }); 
-        
-        this.ball = new THREE.Mesh(geom, mat);
-        this.ball.castShadow = true; 
-        this.ball.receiveShadow = true;
-        this.scene.add(this.ball);
-        
-        // store vertex data for sculpting magic
-        this.verts = geom.attributes.position.array; 
-        this.origPos = [...this.verts]; // backup for reset
+    simpleNoise(x, y, z) {
+        return Math.sin(x * 12.9898 + y * 78.233 + z * 43.141) * 0.5 + 0.5;
     }
 
-    setTool(t) { this.tool = t; }
-    setBrushSize(s) { this.size = s; }
-    setStrength(s) { this.str = s; }
-    setColor(c) { this.ball.material.color.setHex(c); }
+    perlinNoise(x, y, z, octaves = 2) {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        let maxValue = 0;
 
-    moldClay(x, y, z, isTouch = false) {
-        let pos = new THREE.Vector3(x, y, z);
-        let geom = this.ball.geometry;
-        let verts = geom.attributes.position.array;
-        let affected = 0;
-        
-        // loop through all vertices and see which ones are close enough
-        for (let i = 0; i < verts.length; i += 3) {
-            let v = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2]);
-            let dist = v.distanceTo(pos);
-            
-            if (dist < this.size) {
-                // smooth falloff - closer = more effect
-                let factor = Math.pow(1 - (dist / this.size), 2); 
-                this[this.tool](i, v, pos, factor, isTouch); 
-                affected++;
+        for (let i = 0; i < octaves; i++) {
+            value += amplitude * (this.simpleNoise(x * frequency, y * frequency, z * frequency) * 2 - 1);
+            maxValue += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2;
+        }
+
+        return (value / maxValue + 1) * 0.5;
+    }
+
+    applySurfaceNoise(geom, amount = 0.08) {
+        const pos = geom.attributes.position.array;
+
+        for (let i = 0; i < pos.length; i += 3) {
+            const x = pos[i];
+            const y = pos[i + 1];
+            const z = pos[i + 2];
+
+            const noise = this.perlinNoise(x, y, z, 3);
+
+            const vector = new THREE.Vector3(x, y, z);
+            const normal = vector.clone().normalize();
+            const displacement = (noise - 0.5) * amount;
+
+            pos[i] += normal.x * displacement;
+            pos[i + 1] += normal.y * displacement;
+            pos[i + 2] += normal.z * displacement;
+        }
+
+        geom.attributes.position.needsUpdate = true;
+        geom.computeVertexNormals();
+    }
+
+    buildNeighborList(geom) {
+        const count = geom.attributes.position.count;
+        const sets = Array.from({ length: count }, () => new Set());
+        const index = geom.index;
+        if (index) {
+            for (let f = 0; f < index.count; f += 3) {
+                const a = index.getX(f);
+                const b = index.getX(f + 1);
+                const c = index.getX(f + 2);
+                sets[a].add(b);
+                sets[a].add(c);
+                sets[b].add(a);
+                sets[b].add(c);
+                sets[c].add(a);
+                sets[c].add(b);
+            }
+        } else {
+            for (let i = 0; i < count; i++) {
+                if (i > 0) sets[i].add(i - 1);
+                if (i < count - 1) sets[i].add(i + 1);
             }
         }
-        
-        // debugging - remove this if it gets annoying
-        // console.log('sculpting at', pos.x.toFixed(2), pos.y.toFixed(2), pos.z.toFixed(2), 'hit', affected, 'verts');
-        geom.attributes.position.needsUpdate = true; 
-        geom.computeVertexNormals(); 
+        this.neighborList = sets.map((s) => Array.from(s));
+    }
+
+    make() {
+        const geom = new THREE.SphereGeometry(2, this.sphereSegW, this.sphereSegH);
+
+        const posLength = geom.attributes.position.array.length;
+        const colorArray = new Float32Array(posLength);
+        for (let i = 0; i < colorArray.length; i += 3) {
+            colorArray[i] = 0.93;
+            colorArray[i + 1] = 0.76;
+            colorArray[i + 2] = 0.57;
+        }
+        geom.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+
+        const mat = new THREE.MeshStandardMaterial({
+            color: 0xe8c291,
+            roughness: 0.4,
+            metalness: 0.05,
+            clearcoat: 0,
+            clearcoatRoughness: 0.5,
+            envMapIntensity: 1,
+            vertexColors: true,
+            flatShading: false
+        });
+        mat.flatShading = false;
+
+        this.ball = new THREE.Mesh(geom, mat);
+        this.ball.castShadow = true;
+        this.ball.receiveShadow = true;
+        this.ball.visible = true;
+        this.scene.add(this.ball);
+
+        this.buildNeighborList(geom);
+
+        this.verts = geom.attributes.position.array;
+        this.origPos = [...this.verts];
+        geom.computeVertexNormals();
+    }
+
+    setTool(t) {
+        this.tool = t;
+    }
+    setBrushSize(s) {
+        this.size = s;
+    }
+    setStrength(s) {
+        this.str = s;
+    }
+    setColor(c) {
+        this.ball.material.color.setHex(c);
+    }
+
+    /** Ends a pick/grab stroke so the next sample starts fresh. */
+    endPickStroke() {
+        this._pickLastWorld = null;
+        this._pickDelta.set(0, 0, 0);
+    }
+
+    getStretchMetric() {
+        let maxR = 0;
+        for (let i = 0; i < this.verts.length; i += 3) {
+            const r = Math.hypot(this.verts[i], this.verts[i + 1], this.verts[i + 2]);
+            if (r > maxR) maxR = r;
+        }
+        return maxR / 2 - 1;
+    }
+
+    refineMesh() {
+        if (this.sphereSegW >= 256) {
+            return false;
+        }
+
+        const oldGeom = this.ball.geometry;
+        const oldPos = oldGeom.attributes.position.array;
+        const oldColors = oldGeom.getAttribute('color');
+        const oldCount = oldGeom.attributes.position.count;
+
+        const oldDirs = new Float32Array(oldCount * 3);
+        const oldLens = new Float32Array(oldCount);
+        for (let vi = 0; vi < oldCount; vi++) {
+            const i = vi * 3;
+            const x = oldPos[i];
+            const y = oldPos[i + 1];
+            const z = oldPos[i + 2];
+            const len = Math.hypot(x, y, z) || 1;
+            oldLens[vi] = len;
+            oldDirs[i] = x / len;
+            oldDirs[i + 1] = y / len;
+            oldDirs[i + 2] = z / len;
+        }
+
+        const newW = Math.min(this.sphereSegW * 2, 256);
+        const newH = Math.min(this.sphereSegH * 2, 256);
+        const newGeom = new THREE.SphereGeometry(2, newW, newH);
+        const newCount = newGeom.attributes.position.count;
+        const newColorArray = new Float32Array(newCount * 3);
+        newGeom.setAttribute('color', new THREE.BufferAttribute(newColorArray, 3));
+
+        const rest = new Float32Array(newGeom.attributes.position.array);
+        const pos = newGeom.attributes.position.array;
+        const colorAttr = newGeom.getAttribute('color');
+        const newColors = colorAttr.array;
+
+        const tmp = new THREE.Vector3();
+        const dir = new THREE.Vector3();
+
+        for (let vi = 0; vi < newCount; vi++) {
+            const i = vi * 3;
+            dir.set(rest[i], rest[i + 1], rest[i + 2]).normalize();
+
+            let bestDot = -2;
+            let bestLen = 2;
+            let bestColor = [0.93, 0.76, 0.57];
+            for (let oi = 0; oi < oldCount; oi++) {
+                const j = oi * 3;
+                const d =
+                    dir.x * oldDirs[j] +
+                    dir.y * oldDirs[j + 1] +
+                    dir.z * oldDirs[j + 2];
+                if (d > bestDot) {
+                    bestDot = d;
+                    bestLen = oldLens[oi];
+                    if (oldColors) {
+                        bestColor[0] = oldColors.getX(oi);
+                        bestColor[1] = oldColors.getY(oi);
+                        bestColor[2] = oldColors.getZ(oi);
+                    }
+                }
+            }
+
+            tmp.copy(dir).multiplyScalar(bestLen);
+            pos[i] = tmp.x;
+            pos[i + 1] = tmp.y;
+            pos[i + 2] = tmp.z;
+
+            newColors[i] = bestColor[0];
+            newColors[i + 1] = bestColor[1];
+            newColors[i + 2] = bestColor[2];
+        }
+
+        colorAttr.needsUpdate = true;
+
+        newGeom.attributes.position.needsUpdate = true;
+        newGeom.computeVertexNormals();
+
+        this.ball.geometry.dispose();
+        this.ball.geometry = newGeom;
+        this.sphereSegW = newW;
+        this.sphereSegH = newH;
+        this.verts = newGeom.attributes.position.array;
+        this.origPos = [...rest];
+        this.buildNeighborList(newGeom);
+        this.endPickStroke();
+
+        return true;
+    }
+
+    _preparePickBrush(worldHit) {
+        if (this.tool !== 'pick') return;
+        if (this._pickLastWorld == null) {
+            this._pickLastWorld = worldHit.clone();
+            this._pickDelta.set(0, 0, 0);
+        } else {
+            this._pickDelta.subVectors(worldHit, this._pickLastWorld);
+            this._pickLastWorld.copy(worldHit);
+        }
+    }
+
+    moldClay(x, y, z, isTouch = false) {
+        const pos = new THREE.Vector3(x, y, z);
+        if (this.sculptHistoryTarget && !this.replayPlaybackActive) {
+            this.sculptHistoryTarget.push({
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                strength: this.str,
+                radius: this.size,
+                tool: this.tool,
+                isTouch,
+                sculptResponse: this.sculptResponse
+            });
+        }
+
+        const sculptOp = this[this.tool];
+        if (typeof sculptOp !== 'function') {
+            return;
+        }
+
+        const geom = this.ball.geometry;
+        const verts = geom.attributes.position.array;
+        const na = geom.attributes.normal?.array;
+        this._snNormals = na ? new Float32Array(na) : null;
+
+        this._preparePickBrush(pos);
+
+        for (let i = 0; i < verts.length; i += 3) {
+            const v = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2]);
+            const dist = v.distanceTo(pos);
+
+            if (dist < this.size) {
+                const factor = Math.pow(1 - dist / this.size, 2);
+                sculptOp.call(this, i, v, pos, factor, isTouch);
+            }
+        }
+
+        geom.attributes.position.needsUpdate = true;
+        geom.computeVertexNormals();
+        if (geom.attributes.normal) {
+            geom.attributes.normal.needsUpdate = true;
+        }
     }
 
     push(i, v, pt, factor, isTouch) {
-        let dir = v.clone().normalize();
-        let amt = this.str * factor * (isTouch ? 6 : 5); 
-        
+        const dir = v.clone().normalize();
+        const amt = this.str * factor * (isTouch ? 6 : 5) * this.sculptResponse;
+
         this.verts[i] -= dir.x * amt;
         this.verts[i + 1] -= dir.y * amt;
         this.verts[i + 2] -= dir.z * amt;
     }
 
     pull(i, v, pt, factor, isTouch) {
-        let dir = v.clone().normalize();
-        let amt = this.str * factor * (isTouch ? 7 : 6); 
-        
+        const dir = v.clone().normalize();
+        const amt = this.str * factor * (isTouch ? 7 : 6) * this.sculptResponse;
+
         this.verts[i] += dir.x * amt;
         this.verts[i + 1] += dir.y * amt;
         this.verts[i + 2] += dir.z * amt;
     }
 
+    /**
+     * Laplacian smoothing: lerp vertex toward ring neighbor centroid.
+     */
     smooth(i, v, pt, factor, isTouch) {
-        let original = new THREE.Vector3(this.origPos[i], this.origPos[i + 1], this.origPos[i + 2]);
-        let amt = this.str * factor * (isTouch ? 3 : 2.5) * 1.2; 
-        
-        this.verts[i] += (original.x - this.verts[i]) * amt;
-        this.verts[i + 1] += (original.y - this.verts[i + 1]) * amt;
-        this.verts[i + 2] += (original.z - this.verts[i + 2]) * amt;
+        const vi = i / 3;
+        const nbrs = this.neighborList[vi];
+        if (!nbrs || nbrs.length === 0) return;
+
+        let sx = 0;
+        let sy = 0;
+        let sz = 0;
+        for (const j of nbrs) {
+            const k = j * 3;
+            sx += this.verts[k];
+            sy += this.verts[k + 1];
+            sz += this.verts[k + 2];
+        }
+        const inv = 1 / nbrs.length;
+        const neighborPos = new THREE.Vector3(sx * inv, sy * inv, sz * inv);
+        const cur = new THREE.Vector3(this.verts[i], this.verts[i + 1], this.verts[i + 2]);
+        const smoothingFactor = this.str * factor * (isTouch ? 0.4 : 0.34) * this.sculptResponse;
+        cur.lerp(neighborPos, smoothingFactor);
+        this.verts[i] = cur.x;
+        this.verts[i + 1] = cur.y;
+        this.verts[i + 2] = cur.z;
     }
 
-    pinch(i, v, pt, factor, isTouch) {
-        let dir = pt.clone().sub(v).normalize();
-        let amt = this.str * factor * (isTouch ? 6 : 5); 
-        
-        this.verts[i] += dir.x * amt;
-        this.verts[i + 1] += dir.y * amt;
-        this.verts[i + 2] += dir.z * amt;
+    pick(i, v, pt, factor, isTouch) {
+        const w = this.str * factor * (isTouch ? 5.5 : 4.6) * this.sculptResponse;
+        this.verts[i] += this._pickDelta.x * w;
+        this.verts[i + 1] += this._pickDelta.y * w;
+        this.verts[i + 2] += this._pickDelta.z * w;
     }
 
     inflate(i, v, pt, factor, isTouch) {
-        let dir = v.clone().normalize();
-        let amt = this.str * factor * (isTouch ? 5 : 4);
-        
-        this.verts[i] += dir.x * amt;
-        this.verts[i + 1] += dir.y * amt;
-        this.verts[i + 2] += dir.z * amt;
+        let nx;
+        let ny;
+        let nz;
+        if (this._snNormals) {
+            nx = this._snNormals[i];
+            ny = this._snNormals[i + 1];
+            nz = this._snNormals[i + 2];
+        } else {
+            const dir = v.clone().normalize();
+            nx = dir.x;
+            ny = dir.y;
+            nz = dir.z;
+        }
+        const amt = this.str * factor * (isTouch ? 5 : 4) * this.sculptResponse;
+
+        this.verts[i] += nx * amt;
+        this.verts[i + 1] += ny * amt;
+        this.verts[i + 2] += nz * amt;
+    }
+
+    resetMesh() {
+        this.resetClay();
     }
 
     resetClay() {
         for (let i = 0; i < this.verts.length; i++) {
             this.verts[i] = this.origPos[i];
         }
-        
-        this.ball.geometry.attributes.position.needsUpdate = true;
-        this.ball.geometry.computeVertexNormals();
+
+        const colors = this.ball.geometry.getAttribute('color');
+        if (colors) {
+            const colorArray = colors.array;
+            for (let i = 0; i < colorArray.length; i += 3) {
+                colorArray[i] = 0.93;
+                colorArray[i + 1] = 0.76;
+                colorArray[i + 2] = 0.57;
+            }
+            colors.needsUpdate = true;
+        }
+
+        const geom = this.ball.geometry;
+        geom.attributes.position.needsUpdate = true;
+        geom.computeVertexNormals();
+        if (geom.attributes.normal) {
+            geom.attributes.normal.needsUpdate = true;
+        }
+        this.endPickStroke();
     }
 }
 
