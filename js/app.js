@@ -12,7 +12,7 @@ let exporter = null;
 
 const VOID_BG = 0x000000;
 const CAMERA_NEAR = 0.01;
-const ABOUT_SIGNATURE = 'clayable v2.0 / built by prakruti / curated by wonder';
+const ABOUT_SIGNATURE = 'clayable v2.1 / built by prakruti / curated by wonder';
 
 const GALLERY_BG = 0xf5f5f5;
 
