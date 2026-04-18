@@ -26,6 +26,7 @@
 html {
     background: #000000;
     height: 100%;
+    transition: background-color 0.8s ease;
 }
 
 body {
@@ -42,6 +43,105 @@ body {
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
+    transition: background-color 0.8s ease, color 0.8s ease;
+}
+
+body[data-theme="light"] {
+    --muted: rgba(0, 0, 0, 0.42);
+    --full: rgba(0, 0, 0, 0.62);
+    --dock-bg: rgba(255, 255, 255, 0.78);
+    --dock-border: 0.5px solid rgba(0, 0, 0, 0.12);
+    background: #f5f5f5;
+    color: rgba(0, 0, 0, 0.62);
+}
+
+body[data-theme="light"] .studio-canvas-host,
+body[data-theme="light"] #canvas-container {
+    background: #f5f5f5;
+}
+
+body[data-theme="light"] .studio-vignette {
+    background: radial-gradient(
+        ellipse 78% 72% at 50% 48%,
+        rgba(0, 0, 0, 0) 0%,
+        rgba(0, 0, 0, 0.03) 52%,
+        rgba(0, 0, 0, 0.07) 100%
+    );
+}
+
+body[data-theme="light"] .studio-tool {
+    color: rgba(0, 0, 0, 0.62);
+}
+
+body[data-theme="light"] .studio-tool::before {
+    background: #111111;
+}
+
+body[data-theme="light"] .studio-swatch {
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="light"] .studio-dock-cap {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+body[data-theme="light"] .studio-dock .studio-control-group:hover .studio-dock-cap {
+    color: rgba(0, 0, 0, 0.75);
+}
+
+body[data-theme="light"] .studio-toast {
+    background: rgba(255, 255, 255, 0.88);
+    color: rgba(0, 0, 0, 0.75);
+    border: var(--dock-border);
+}
+
+body[data-theme="light"] .chrome-cluster .chrome-anchor--help,
+body[data-theme="light"] .chrome-cluster .chrome-anchor--theme {
+    color: #000000;
+    opacity: 0.4;
+}
+
+body[data-theme="light"] .chrome-cluster .chrome-anchor--help:hover,
+body[data-theme="light"] .chrome-cluster .chrome-anchor--theme:hover {
+    opacity: 1;
+}
+
+body[data-theme="light"] .studio-signature {
+    color: #000000;
+    opacity: 0.4;
+}
+
+body[data-theme="light"] .about-glass {
+    background: var(--dock-bg);
+    border: var(--dock-border);
+}
+
+body[data-theme="light"] .about-glass__text {
+    color: rgba(0, 0, 0, 0.72);
+}
+
+body[data-theme="light"] .about-glass__dismiss {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+body[data-theme="light"] .studio-dock .studio-btn {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+body[data-theme="light"] .info-overlay--dim {
+    background: rgba(240, 240, 240, 0.94);
+}
+
+body[data-theme="light"] .info-heading {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+body[data-theme="light"] .help-list {
+    color: rgba(0, 0, 0, 0.72);
+}
+
+body[data-theme="light"] .info-dismiss {
+    color: rgba(0, 0, 0, 0.55);
 }
 
 .studio-canvas-host,
@@ -98,11 +198,24 @@ canvas:active {
     opacity: 1;
 }
 
-.chrome-anchor--help {
-    top: auto;
+.chrome-cluster {
+    position: fixed;
     bottom: 30px;
     left: 30px;
+    z-index: var(--chrome-z);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+}
+
+.chrome-cluster .chrome-anchor--help {
+    position: static;
+    top: auto;
+    bottom: auto;
+    left: auto;
     padding: 20px;
+    margin: -20px 0 -20px -20px;
     font-size: 14px;
     font-weight: 500;
     color: #ffffff;
@@ -111,34 +224,62 @@ canvas:active {
     transition: opacity 0.25s ease;
 }
 
-.chrome-anchor--help:hover {
+.chrome-cluster .chrome-anchor--help:hover {
     opacity: 1;
     text-decoration: underline;
     text-underline-offset: 4px;
 }
 
-.chrome-anchor--about {
-    top: auto;
+.chrome-anchor--theme {
+    position: static;
+    padding: 12px 10px;
+    margin: -12px -4px -12px 0;
+    font-size: 11px;
+    font-weight: 400;
+    color: #ffffff;
+    opacity: 0.4;
+    transition: opacity 0.25s ease;
+}
+
+.chrome-anchor--theme:hover {
+    opacity: 1;
+}
+
+/* corner signature — below dock (z-index); wrap receives hover, text has no padding */
+.studio-signature-wrap {
+    position: fixed;
     bottom: 30px;
     right: 30px;
-    left: auto;
-    max-width: min(240px, calc(100vw - 80px));
+    z-index: 55;
+    max-width: min(220px, calc(100vw - 120px));
+    margin: 0;
     padding: 0;
+    background: none;
+    border: none;
+    pointer-events: auto;
+}
+
+.studio-signature {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
     font-family: "JetBrains Mono", monospace;
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.4;
     letter-spacing: var(--track);
     text-transform: lowercase;
     text-align: right;
     color: #ffffff;
+    opacity: 0.3;
     white-space: normal;
-    opacity: 0.4;
-    cursor: pointer;
-    transition: opacity 0.25s ease;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
 }
 
-.chrome-anchor--about:hover {
-    opacity: 0.7;
+.studio-signature-wrap:hover .studio-signature {
+    opacity: 0.8;
 }
 
 /* ——— left: sculpt modes ——— */
@@ -264,7 +405,7 @@ canvas:active {
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 20px;
     max-width: min(calc(100vw - 100px), 720px);
     padding: 7px 20px 8px;
     background: var(--dock-bg);
@@ -282,17 +423,29 @@ canvas:active {
 
 .studio-dock__segment {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 auto;
     min-width: 0;
 }
 
-.controls.studio-dock > *:not(:last-child) {
-    border-right: var(--dock-border);
-    margin-right: 14px;
-    padding-right: 14px;
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.studio-dock-cap {
+    font-family: var(--font);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: var(--track);
+    text-transform: lowercase;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.2;
+    margin-bottom: 2px;
 }
 
 .studio-control-group {
@@ -309,50 +462,94 @@ canvas:active {
     white-space: nowrap;
 }
 
-.studio-dock .studio-control-group:hover .studio-label {
-    color: rgba(255, 255, 255, 0.75);
+.studio-dock .studio-control-group:hover .studio-dock-cap {
+    color: rgba(255, 255, 255, 0.72);
 }
 
+/* 1. THE BASE INPUT */
 .studio-slider {
-    width: 100px;
-    max-width: 22vw;
-    height: 10px;
-    background: transparent;
-    outline: none;
     -webkit-appearance: none;
     appearance: none;
+    width: 100px;
+    max-width: 100px;
+    height: 14px;
+    background: transparent;
     cursor: pointer;
-}
-
-.studio-slider::-webkit-slider-runnable-track {
-    height: 1px;
-    border-radius: 1px;
-    background: rgba(255, 255, 255, 0.14);
-}
-
-.studio-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 9px;
-    height: 9px;
-    margin-top: -4px;
-    border-radius: 50%;
-    background: #ffffff;
     border: none;
-    cursor: pointer;
+    display: block;
+    outline: none;
+}
+
+/* 2. THE TRACK (Must be separate rules) */
+.studio-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 1px;
+    border: none;
+}
+
+body[data-theme="light"] .studio-slider::-webkit-slider-runnable-track {
+    background: rgba(0, 0, 0, 0.1);
 }
 
 .studio-slider::-moz-range-track {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.14);
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 1px;
+    border: none;
+}
+
+body[data-theme="light"] .studio-slider::-moz-range-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* 3. THE THUMB (The Dot) */
+.studio-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    width: 12px;
+    border-radius: 50%;
+    background: #ffffff;
+    margin-top: -5px;
+    border: none;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+body[data-theme="light"] .studio-slider::-webkit-slider-thumb {
+    background: #4a4a4a;
 }
 
 .studio-slider::-moz-range-thumb {
-    width: 9px;
-    height: 9px;
+    height: 12px;
+    width: 12px;
     border-radius: 50%;
     background: #ffffff;
     border: none;
-    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+body[data-theme="light"] .studio-slider::-moz-range-thumb {
+    background: #4a4a4a;
+}
+
+/* 4. HOVER FEEDBACK */
+.studio-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
+}
+
+.studio-slider:hover::-moz-range-thumb {
+    transform: scale(1.2);
+}
+
+body[data-theme="light"] .studio-slider:hover::-webkit-slider-thumb {
+    background: #3a3a3a;
+}
+
+body[data-theme="light"] .studio-slider:hover::-moz-range-thumb {
+    background: #3a3a3a;
 }
 
 .studio-dock .studio-btn {
@@ -653,19 +850,15 @@ canvas:active {
         max-width: calc(100vw - 24px);
         padding: 6px 12px 7px;
         flex-wrap: wrap;
-        row-gap: 6px;
+        row-gap: 10px;
+        column-gap: 16px;
         justify-content: center;
         white-space: normal;
     }
 
-    .controls.studio-dock > *:not(:last-child) {
-        margin-right: 10px;
-        padding-right: 10px;
-    }
-
     .studio-slider {
         width: 72px;
-        max-width: 28vw;
+        max-width: 72px;
     }
 
     .studio-toolbar {
@@ -676,15 +869,14 @@ canvas:active {
         padding: 56px 10px 56px 6px;
     }
 
-    .chrome-anchor--help {
+    .chrome-cluster {
         bottom: 30px;
         left: 30px;
-        top: auto;
     }
 
-    .chrome-anchor--about {
-        right: 30px;
+    .studio-signature-wrap {
         bottom: 30px;
+        right: 30px;
         max-width: min(200px, calc(100vw - 72px));
     }
 }

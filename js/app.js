@@ -11,27 +11,41 @@ const spinSpeed = 0.001;
 let exporter = null;
 
 const VOID_BG = 0x000000;
-const CLEAR_COLOR = 0x000000;
 const CAMERA_NEAR = 0.01;
 const ABOUT_SIGNATURE = 'clayable v2.0 / built by prakruti / curated by wonder';
 
+const GALLERY_BG = 0xf5f5f5;
+
+/** scene + ui: dark studio vs sunlit gallery */
 const themes = {
-    light: {
-        bg: VOID_BG,
-        ambLight: 0xffffff,
-        keyLight: 0xffd700
-    },
     dark: {
-        bg: VOID_BG,
-        ambLight: 0x404040,
-        keyLight: 0xffffff
+        scene: VOID_BG,
+        clear: VOID_BG,
+        ambIntensity: 0.1,
+        ambColor: 0xffffff,
+        keyColor: 0xfff4ec,
+        keyIntensity: 2.45,
+        rimColor: 0xc8e2ff,
+        rimIntensity: 1.95,
+        keyPosition: { x: 7, y: 11, z: 5 }
+    },
+    light: {
+        scene: GALLERY_BG,
+        clear: GALLERY_BG,
+        ambIntensity: 0.84,
+        ambColor: 0xffffff,
+        keyColor: 0xfffcf5,
+        keyIntensity: 2.35,
+        rimColor: 0xfff2e8,
+        rimIntensity: 1.38,
+        keyPosition: { x: 4, y: 8, z: 11 }
     }
 };
 
 let isDarkMode = true;
 let tool = 'pull';
 let clay;
-let ambLight, keyLight, backLight;
+let ambLight, keyLight, rimLight;
 let sculptStrength = 0.11;
 let sculptRadius = 0.5;
 let currentSwatchId = 'terracotta';
@@ -39,7 +53,7 @@ let rc = new THREE.Raycaster();
 let initialized = false;
 let lastStretchToastAt = 0;
 
-/** earthy palette — roughness tuned per pigment */
+/** studio palette — dark: earthy; light: porcelain / pastel mineral */
 const STUDIO_SWATCHES = [
     { id: 'terracotta', label: 'terracotta', hex: 0xe2725b, roughness: 0.92, metalness: 0 },
     { id: 'sage', label: 'sage', hex: 0xb2ac88, roughness: 0.78, metalness: 0.02 },
@@ -49,6 +63,46 @@ const STUDIO_SWATCHES = [
     { id: 'charcoal', label: 'charcoal', hex: 0x36454f, roughness: 0.58, metalness: 0.08 }
 ];
 
+/** light-mode hex only (matte ceramic look) */
+const STUDIO_SWATCHES_LIGHT_HEX = {
+    terracotta: 0xff8a75,
+    sage: 0xd1d8c5,
+    ochre: 0xe8b05d,
+    slate: 0xa0afba,
+    sand: 0xf0e6d2,
+    charcoal: 0x4a4a4a
+};
+
+const LIGHT_MODE_ROUGHNESS_BUMP = 0.1;
+
+function hexForSwatchTheme(sw) {
+    if (isDarkMode) return sw.hex;
+    return STUDIO_SWATCHES_LIGHT_HEX[sw.id] ?? sw.hex;
+}
+
+function roughnessForSwatchTheme(sw) {
+    let r = sw.roughness;
+    if (!isDarkMode) {
+        r = Math.min(0.98, r + LIGHT_MODE_ROUGHNESS_BUMP);
+    }
+    return r;
+}
+
+function metalnessForSwatchTheme(sw) {
+    if (!isDarkMode) return 0;
+    return sw.metalness;
+}
+
+function syncPaletteSwatchColors() {
+    document.querySelectorAll('.studio-swatch').forEach((el) => {
+        const id = el.dataset.swatch;
+        const sw = STUDIO_SWATCHES.find((s) => s.id === id);
+        if (!sw) return;
+        const hex = hexForSwatchTheme(sw);
+        el.style.backgroundColor = '#' + hex.toString(16).padStart(6, '0');
+    });
+}
+
 const SCULPT_TOOLS = ['push', 'pull', 'smooth', 'pick', 'inflate'];
 
 let sculptHistory = [];
@@ -57,21 +111,39 @@ let replayRunning = false;
 function setupLighting() {
     if (ambLight) scene.remove(ambLight);
     if (keyLight) scene.remove(keyLight);
-    if (backLight) scene.remove(backLight);
+    if (rimLight) scene.remove(rimLight);
 
-    const theme = themes[isDarkMode ? 'dark' : 'light'];
+    const t = themes[isDarkMode ? 'dark' : 'light'];
 
-    ambLight = new THREE.AmbientLight(theme.ambLight, 0.6);
+    ambLight = new THREE.AmbientLight(t.ambColor, t.ambIntensity);
     scene.add(ambLight);
 
-    keyLight = new THREE.DirectionalLight(theme.keyLight, 0.85);
-    keyLight.position.set(8, 10, 6);
+    keyLight = new THREE.DirectionalLight(t.keyColor, t.keyIntensity);
+    const kp = t.keyPosition || { x: 7, y: 11, z: 5 };
+    keyLight.position.set(kp.x, kp.y, kp.z);
     keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -10;
+    keyLight.shadow.camera.right = 10;
+    keyLight.shadow.camera.top = 10;
+    keyLight.shadow.camera.bottom = -10;
+    keyLight.shadow.bias = -0.0008;
     scene.add(keyLight);
 
-    backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    backLight.position.set(-6, -4, -8);
-    scene.add(backLight);
+    rimLight = new THREE.DirectionalLight(t.rimColor, t.rimIntensity);
+    rimLight.position.set(-9, 4, -10);
+    rimLight.castShadow = false;
+    scene.add(rimLight);
+}
+
+function syncSceneAndRendererBg() {
+    if (!scene || !renderer) return;
+    const t = themes[isDarkMode ? 'dark' : 'light'];
+    scene.background = new THREE.Color(t.scene);
+    renderer.setClearColor(t.clear, 1);
 }
 
 function showStudioToast(message) {
@@ -117,18 +189,22 @@ function selectSculptTool(id) {
 
 function applyStudioSwatch(id, syncSliders = true) {
     const sw = STUDIO_SWATCHES.find((s) => s.id === id);
-    if (!sw || !clay?.ball) return;
+    if (!sw) return;
 
     currentSwatchId = id;
-    const mat = clay.ball.material;
-    mat.color.setHex(sw.hex);
-    mat.roughness = sw.roughness;
-    mat.metalness = sw.metalness;
-    mat.needsUpdate = true;
+
+    if (clay?.ball) {
+        const mat = clay.ball.material;
+        mat.color.setHex(hexForSwatchTheme(sw));
+        mat.roughness = roughnessForSwatchTheme(sw);
+        mat.metalness = metalnessForSwatchTheme(sw);
+        mat.needsUpdate = true;
+    }
 
     document.querySelectorAll('.studio-swatch').forEach((el) => {
         el.classList.toggle('is-active', el.dataset.swatch === id);
     });
+    syncPaletteSwatchColors();
 
     if (syncSliders) {
         const sizeSlider = document.querySelector('.size-slider');
@@ -147,7 +223,7 @@ function init() {
     canvas.innerHTML = '';
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(VOID_BG);
+    scene.background = new THREE.Color(themes.dark.scene);
 
     cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, CAMERA_NEAR, 1000);
     cam.position.set(0, 0, 5);
@@ -157,7 +233,7 @@ function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(CLEAR_COLOR, 1);
+    renderer.setClearColor(themes.dark.clear, 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -237,7 +313,7 @@ function makeUI() {
         b.dataset.swatch = sw.id;
         b.setAttribute('aria-label', sw.label);
         b.setAttribute('aria-pressed', sw.id === currentSwatchId ? 'true' : 'false');
-        b.style.backgroundColor = '#' + sw.hex.toString(16).padStart(6, '0');
+        b.style.backgroundColor = '#' + hexForSwatchTheme(sw).toString(16).padStart(6, '0');
         b.onclick = () => {
             applyStudioSwatch(sw.id, true);
             document.querySelectorAll('.studio-swatch').forEach((el) => {
@@ -250,12 +326,15 @@ function makeUI() {
 
     const sizeWrap = document.createElement('div');
     sizeWrap.className = 'studio-control-group studio-dock__segment';
-    const sizeLbl = document.createElement('label');
-    sizeLbl.className = 'studio-label';
-    sizeLbl.htmlFor = 'size-slider';
-    sizeLbl.textContent = 'size';
+    const sizeGroup = document.createElement('div');
+    sizeGroup.className = 'slider-group';
+    const sizeCap = document.createElement('span');
+    sizeCap.className = 'studio-dock-cap';
+    sizeCap.id = 'dock-radius-cap';
+    sizeCap.textContent = 'radius';
     const sizeSlider = document.createElement('input');
     sizeSlider.id = 'size-slider';
+    sizeSlider.setAttribute('aria-labelledby', 'dock-radius-cap');
     sizeSlider.type = 'range';
     sizeSlider.min = '0.1';
     sizeSlider.max = '0.8';
@@ -266,17 +345,21 @@ function makeUI() {
         sculptRadius = parseFloat(e.target.value);
         if (clay) clay.setBrushSize(sculptRadius);
     };
-    sizeWrap.appendChild(sizeLbl);
-    sizeWrap.appendChild(sizeSlider);
+    sizeGroup.appendChild(sizeCap);
+    sizeGroup.appendChild(sizeSlider);
+    sizeWrap.appendChild(sizeGroup);
 
     const strWrap = document.createElement('div');
     strWrap.className = 'studio-control-group studio-dock__segment';
-    const strLbl = document.createElement('label');
-    strLbl.className = 'studio-label';
-    strLbl.htmlFor = 'strength-slider';
-    strLbl.textContent = 'strength';
+    const strGroup = document.createElement('div');
+    strGroup.className = 'slider-group';
+    const strCap = document.createElement('span');
+    strCap.className = 'studio-dock-cap';
+    strCap.id = 'dock-intensity-cap';
+    strCap.textContent = 'intensity';
     const strSlider = document.createElement('input');
     strSlider.id = 'strength-slider';
+    strSlider.setAttribute('aria-labelledby', 'dock-intensity-cap');
     strSlider.type = 'range';
     strSlider.min = '0.05';
     strSlider.max = '0.35';
@@ -287,8 +370,9 @@ function makeUI() {
         sculptStrength = parseFloat(e.target.value);
         if (clay) clay.setStrength(sculptStrength);
     };
-    strWrap.appendChild(strLbl);
-    strWrap.appendChild(strSlider);
+    strGroup.appendChild(strCap);
+    strGroup.appendChild(strSlider);
+    strWrap.appendChild(strGroup);
 
     const replayBtn = document.createElement('button');
     replayBtn.type = 'button';
@@ -312,32 +396,53 @@ function makeUI() {
 }
 
 function setupChrome() {
-    if (!document.getElementById('help-btn')) {
-        const help = document.createElement('button');
+    let cluster = document.getElementById('chrome-cluster');
+    if (!cluster) {
+        cluster = document.createElement('div');
+        cluster.id = 'chrome-cluster';
+        cluster.className = 'chrome-cluster';
+        cluster.setAttribute('aria-label', 'help and theme');
+        document.body.appendChild(cluster);
+    }
+
+    let help = document.getElementById('help-btn');
+    if (!help) {
+        help = document.createElement('button');
         help.type = 'button';
         help.id = 'help-btn';
         help.className = 'chrome-anchor chrome-anchor--help';
         help.setAttribute('aria-label', 'help');
         help.textContent = '?';
         help.onclick = () => showHelpModal();
-        document.body.appendChild(help);
+        cluster.appendChild(help);
+    } else if (help.parentElement !== cluster) {
+        cluster.appendChild(help);
     }
 
-    let aboutBtn = document.getElementById('about-btn');
-    if (!aboutBtn) {
-        aboutBtn = document.createElement('button');
-        aboutBtn.type = 'button';
-        aboutBtn.id = 'about-btn';
-        aboutBtn.className = 'chrome-anchor chrome-anchor--about';
-        aboutBtn.setAttribute('aria-label', 'about clayable');
-        aboutBtn.textContent = ABOUT_SIGNATURE;
-        document.body.appendChild(aboutBtn);
+    let themeBtn = document.getElementById('theme-toggle');
+    if (!themeBtn) {
+        themeBtn = document.createElement('button');
+        themeBtn.type = 'button';
+        themeBtn.id = 'theme-toggle';
+        themeBtn.className = 'chrome-anchor chrome-anchor--theme';
+        themeBtn.onclick = () => toggleDarkMode();
+        cluster.appendChild(themeBtn);
     }
-    aboutBtn.textContent = ABOUT_SIGNATURE;
-    if (!aboutBtn.dataset.wired) {
-        aboutBtn.dataset.wired = '1';
-        aboutBtn.addEventListener('click', () => showAboutModal());
+    syncThemeToggleLabel();
+
+    let wrap = document.querySelector('.studio-signature-wrap');
+    let sig = document.getElementById('studio-signature');
+    if (!sig) {
+        wrap = document.createElement('div');
+        wrap.className = 'studio-signature-wrap';
+        sig = document.createElement('p');
+        sig.id = 'studio-signature';
+        sig.className = 'studio-signature';
+        sig.setAttribute('aria-hidden', 'true');
+        wrap.appendChild(sig);
+        document.body.appendChild(wrap);
     }
+    sig.textContent = ABOUT_SIGNATURE;
 }
 
 function wireEscapeDismiss(overlay) {
@@ -368,6 +473,7 @@ function showHelpModal() {
                 <li>reset: r</li>
                 <li>refine mesh: f</li>
                 <li>modes: push pull smooth pick inflate (left bar or keys 1–5)</li>
+                <li>gallery light / studio dark: t or light · beside help</li>
             </ul>
             <button type="button" class="info-dismiss">close</button>
         </div>
@@ -405,14 +511,26 @@ function showAboutModal() {
 
 function toggleDarkMode() {
     isDarkMode = !isDarkMode;
-    scene.background = new THREE.Color(themes[isDarkMode ? 'dark' : 'light'].bg);
+    syncSceneAndRendererBg();
     setupLighting();
     updatePageStyles();
+    applyStudioSwatch(currentSwatchId, false);
+    syncThemeToggleLabel();
+}
+
+function syncThemeToggleLabel() {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.textContent = isDarkMode ? 'light' : 'dark';
+    btn.setAttribute('aria-label', isDarkMode ? 'switch to gallery light mode' : 'switch to dark studio');
 }
 
 function updatePageStyles() {
-    document.body.style.background = '#000000';
-    document.body.style.color = '#ffffff';
+    document.body.dataset.theme = isDarkMode ? 'dark' : 'light';
+    const canvasHost = document.getElementById('canvas-container');
+    if (canvasHost) {
+        canvasHost.style.backgroundColor = isDarkMode ? '#000000' : '#f5f5f5';
+    }
 }
 
 function onKey(e) {
@@ -597,7 +715,7 @@ function resize() {
     cam.near = CAMERA_NEAR;
     cam.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(CLEAR_COLOR, 1);
+    syncSceneAndRendererBg();
 }
 
 function onTouchStart(e) {

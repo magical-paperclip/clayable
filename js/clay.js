@@ -258,6 +258,53 @@ class ClaySculptor {
         }
     }
 
+    /**
+     * Gaussian thumb: exp(-(dist^2) / (2 * radius^2)) — soft dough, no spike cone.
+     */
+    _brushFalloff(dist) {
+        const r = this.size;
+        if (r <= 0 || dist > r * 1.05) return 0;
+        return Math.exp(-(dist * dist) / (2 * r * r));
+    }
+
+    /**
+     * Post push/pull relax on brush zone — blends neighbors to prevent tearing.
+     */
+    _relaxBrushRegion(brushCenter, isTouch) {
+        const verts = this.verts;
+        const snap = new Float32Array(verts);
+        const count = verts.length / 3;
+        const alphaBase = isTouch ? 0.34 : 0.27;
+        for (let vi = 0; vi < count; vi++) {
+            const i = vi * 3;
+            const vx = snap[i];
+            const vy = snap[i + 1];
+            const vz = snap[i + 2];
+            const d = Math.hypot(vx - brushCenter.x, vy - brushCenter.y, vz - brushCenter.z);
+            const g = this._brushFalloff(d);
+            if (g < 1e-5) continue;
+            const nbrs = this.neighborList[vi];
+            if (!nbrs || nbrs.length === 0) continue;
+            let sx = 0;
+            let sy = 0;
+            let sz = 0;
+            for (const j of nbrs) {
+                const k = j * 3;
+                sx += snap[k];
+                sy += snap[k + 1];
+                sz += snap[k + 2];
+            }
+            const inv = 1 / nbrs.length;
+            const tx = sx * inv;
+            const ty = sy * inv;
+            const tz = sz * inv;
+            const a = alphaBase * g * this.sculptResponse;
+            verts[i] = vx + (tx - vx) * a;
+            verts[i + 1] = vy + (ty - vy) * a;
+            verts[i + 2] = vz + (tz - vz) * a;
+        }
+    }
+
     moldClay(x, y, z, isTouch = false) {
         const pos = new THREE.Vector3(x, y, z);
         if (this.sculptHistoryTarget && !this.replayPlaybackActive) {
@@ -285,14 +332,17 @@ class ClaySculptor {
 
         this._preparePickBrush(pos);
 
+        const toolId = this.tool;
         for (let i = 0; i < verts.length; i += 3) {
             const v = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2]);
             const dist = v.distanceTo(pos);
+            const factor = this._brushFalloff(dist);
+            if (factor < 1e-6) continue;
+            sculptOp.call(this, i, v, pos, factor, isTouch);
+        }
 
-            if (dist < this.size) {
-                const factor = Math.pow(1 - dist / this.size, 2);
-                sculptOp.call(this, i, v, pos, factor, isTouch);
-            }
+        if (toolId === 'push' || toolId === 'pull') {
+            this._relaxBrushRegion(pos, isTouch);
         }
 
         geom.attributes.position.needsUpdate = true;
@@ -304,20 +354,22 @@ class ClaySculptor {
 
     push(i, v, pt, factor, isTouch) {
         const dir = v.clone().normalize();
-        const amt = this.str * factor * (isTouch ? 6 : 5) * this.sculptResponse;
+        const disp =
+            this.str * this.sculptResponse * factor * (isTouch ? 4.25 : 3.65);
 
-        this.verts[i] -= dir.x * amt;
-        this.verts[i + 1] -= dir.y * amt;
-        this.verts[i + 2] -= dir.z * amt;
+        this.verts[i] -= dir.x * disp;
+        this.verts[i + 1] -= dir.y * disp;
+        this.verts[i + 2] -= dir.z * disp;
     }
 
     pull(i, v, pt, factor, isTouch) {
         const dir = v.clone().normalize();
-        const amt = this.str * factor * (isTouch ? 7 : 6) * this.sculptResponse;
+        const disp =
+            this.str * this.sculptResponse * factor * (isTouch ? 4.6 : 4.0);
 
-        this.verts[i] += dir.x * amt;
-        this.verts[i + 1] += dir.y * amt;
-        this.verts[i + 2] += dir.z * amt;
+        this.verts[i] += dir.x * disp;
+        this.verts[i + 1] += dir.y * disp;
+        this.verts[i + 2] += dir.z * disp;
     }
 
     /**
@@ -340,7 +392,7 @@ class ClaySculptor {
         const inv = 1 / nbrs.length;
         const neighborPos = new THREE.Vector3(sx * inv, sy * inv, sz * inv);
         const cur = new THREE.Vector3(this.verts[i], this.verts[i + 1], this.verts[i + 2]);
-        const smoothingFactor = this.str * factor * (isTouch ? 0.4 : 0.34) * this.sculptResponse;
+        const smoothingFactor = this.str * factor * (isTouch ? 0.68 : 0.58) * this.sculptResponse;
         cur.lerp(neighborPos, smoothingFactor);
         this.verts[i] = cur.x;
         this.verts[i + 1] = cur.y;
