@@ -17,6 +17,9 @@ const ABOUT_SIGNATURE = 'clayable v2.1 / built by prakruti / curated by wonder';
 
 /** Discord invite — set to your server’s discord.gg/… link. */
 const DISCORD_COMMUNITY_URL = 'https://discord.gg/wUAxP3YDv8';
+const SAVE_ENDPOINT = '/api/state';
+const SESSION_STORAGE_KEY = 'clayable:session-id';
+const AUTOSAVE_DEBOUNCE_MS = 1200;
 
 const GALLERY_BG = 0xf5f5f5;
 
@@ -111,6 +114,10 @@ const SCULPT_TOOLS = ['push', 'pull', 'smooth', 'pick', 'inflate'];
 
 let sculptHistory = [];
 let replayRunning = false;
+let hydrateDone = false;
+let autosaveTimer = null;
+let autosaveInFlight = false;
+let autosaveQueued = false;
 
 function setupLighting() {
     if (ambLight) scene.remove(ambLight);
@@ -189,6 +196,7 @@ function selectSculptTool(id) {
         clay.endPickStroke();
     }
     syncToolStripUI();
+    scheduleAutosave('tool');
 }
 
 function applyStudioSwatch(id, syncSliders = true) {
@@ -216,9 +224,136 @@ function applyStudioSwatch(id, syncSliders = true) {
         const strengthSlider = document.querySelector('.strength-slider');
         if (strengthSlider) strengthSlider.value = String(sculptStrength);
     }
+    scheduleAutosave('swatch');
 }
 
-function init() {
+function getSessionId() {
+    let id = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (id) return id;
+    id = `clay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(SESSION_STORAGE_KEY, id);
+    return id;
+}
+
+function buildPersistedState() {
+    return {
+        version: 1,
+        isDarkMode,
+        tool,
+        sculptStrength,
+        sculptRadius,
+        currentSwatchId,
+        sculptHistory
+    };
+}
+
+async function saveStateNow() {
+    if (!hydrateDone || replayRunning || !clay) return;
+    if (autosaveInFlight) {
+        autosaveQueued = true;
+        return;
+    }
+    autosaveInFlight = true;
+    try {
+        await fetch(SAVE_ENDPOINT, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: getSessionId(),
+                state: buildPersistedState()
+            })
+        });
+    } catch (error) {
+        showStudioToast('autosave failed');
+    } finally {
+        autosaveInFlight = false;
+        if (autosaveQueued) {
+            autosaveQueued = false;
+            scheduleAutosave('queued');
+        }
+    }
+}
+
+function scheduleAutosave(_reason = 'change') {
+    if (!hydrateDone) return;
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+        autosaveTimer = null;
+        saveStateNow();
+    }, AUTOSAVE_DEBOUNCE_MS);
+}
+
+async function hydrateStateFromCloud() {
+    const sessionId = getSessionId();
+    try {
+        const resp = await fetch(`${SAVE_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!resp.ok) return;
+        const payload = await resp.json();
+        const state = payload?.state;
+        if (!state || typeof state !== 'object') return;
+
+        if (typeof state.isDarkMode === 'boolean' && state.isDarkMode !== isDarkMode) {
+            isDarkMode = state.isDarkMode;
+            syncSceneAndRendererBg();
+            setupLighting();
+            updatePageStyles();
+            syncThemeToggleLabel();
+        }
+
+        if (typeof state.sculptStrength === 'number') {
+            sculptStrength = state.sculptStrength;
+            clay.setStrength(sculptStrength);
+        }
+
+        if (typeof state.sculptRadius === 'number') {
+            sculptRadius = state.sculptRadius;
+            clay.setBrushSize(sculptRadius);
+        }
+
+        if (typeof state.currentSwatchId === 'string') {
+            currentSwatchId = state.currentSwatchId;
+        }
+
+        if (typeof state.tool === 'string' && SCULPT_TOOLS.includes(state.tool)) {
+            tool = state.tool;
+            clay.setTool(tool);
+        }
+
+        const savedHistory = Array.isArray(state.sculptHistory) ? state.sculptHistory : [];
+        resetMesh();
+        sculptHistory.length = 0;
+        clay.replayPlaybackActive = true;
+        for (const step of savedHistory) {
+            if (!step || typeof step !== 'object') continue;
+            if (!SCULPT_TOOLS.includes(step.tool)) continue;
+            clay.setTool(step.tool);
+            clay.setStrength(typeof step.strength === 'number' ? step.strength : sculptStrength);
+            clay.setBrushSize(typeof step.radius === 'number' ? step.radius : sculptRadius);
+            clay.sculptResponse = typeof step.sculptResponse === 'number' ? step.sculptResponse : 1;
+            if (
+                typeof step.x === 'number' &&
+                typeof step.y === 'number' &&
+                typeof step.z === 'number'
+            ) {
+                clay.moldClay(step.x, step.y, step.z, Boolean(step.isTouch));
+                sculptHistory.push(step);
+            }
+        }
+        clay.replayPlaybackActive = false;
+        clay.setTool(tool);
+        clay.setStrength(sculptStrength);
+        clay.setBrushSize(sculptRadius);
+        applyStudioSwatch(currentSwatchId, true);
+        syncToolStripUI();
+        showStudioToast('restored your last clay session');
+    } catch (error) {
+        showStudioToast('could not load saved session');
+    } finally {
+        hydrateDone = true;
+    }
+}
+
+async function init() {
     if (initialized) return;
     initialized = true;
 
@@ -280,6 +415,8 @@ function init() {
     setupChrome();
     applyStudioSwatch(currentSwatchId, true);
     updatePageStyles();
+    await hydrateStateFromCloud();
+    if (!hydrateDone) hydrateDone = true;
     animate();
 }
 
@@ -351,6 +488,7 @@ function makeUI() {
     sizeSlider.oninput = (e) => {
         sculptRadius = parseFloat(e.target.value);
         if (clay) clay.setBrushSize(sculptRadius);
+        scheduleAutosave('radius');
     };
     sizeGroup.appendChild(sizeCap);
     sizeGroup.appendChild(sizeSlider);
@@ -376,6 +514,7 @@ function makeUI() {
     strSlider.oninput = (e) => {
         sculptStrength = parseFloat(e.target.value);
         if (clay) clay.setStrength(sculptStrength);
+        scheduleAutosave('strength');
     };
     strGroup.appendChild(strCap);
     strGroup.appendChild(strSlider);
@@ -558,6 +697,7 @@ function toggleDarkMode() {
     updatePageStyles();
     applyStudioSwatch(currentSwatchId, false);
     syncThemeToggleLabel();
+    scheduleAutosave('theme');
 }
 
 function syncThemeToggleLabel() {
@@ -604,6 +744,7 @@ function resetMesh() {
 function reset() {
     resetMesh();
     sculptHistory.length = 0;
+    scheduleAutosave('reset');
 }
 
 async function playReplay() {
@@ -773,6 +914,7 @@ function onTouchStart(e) {
         if (hits.length > 0) {
             const pt = hits[0].point;
             clay.moldClay(pt.x, pt.y, pt.z, true);
+            scheduleAutosave('touch-start');
         }
     }
 }
@@ -789,6 +931,7 @@ function onTouchMove(e) {
         if (hits.length > 0) {
             const pt = hits[0].point;
             clay.moldClay(pt.x, pt.y, pt.z, true);
+            scheduleAutosave('touch-move');
         }
     }
 }
@@ -832,6 +975,7 @@ function setupSculptingMode() {
                 controls.enabled = false;
                 const pt = hits[0].point;
                 clay.moldClay(pt.x, pt.y, pt.z, false);
+                scheduleAutosave('sculpt-start');
             }
         }
     });
@@ -848,6 +992,7 @@ function setupSculptingMode() {
             if (hits.length > 0) {
                 const pt = hits[0].point;
                 clay.moldClay(pt.x, pt.y, pt.z, false);
+                scheduleAutosave('sculpt-move');
             }
         }
     });
