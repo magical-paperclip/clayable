@@ -118,6 +118,7 @@ let hydrateDone = false;
 let autosaveTimer = null;
 let autosaveInFlight = false;
 let autosaveQueued = false;
+let saveStatus = 'offline';
 
 function setupLighting() {
     if (ambLight) scene.remove(ambLight);
@@ -247,6 +248,24 @@ function buildPersistedState() {
     };
 }
 
+function setSaveStatus(next) {
+    saveStatus = next;
+    const el = document.getElementById('save-status');
+    if (!el) return;
+    const labels = {
+        offline: 'not synced',
+        loading: 'loading...',
+        saving: 'saving...',
+        saved: 'saved',
+        error: 'save failed'
+    };
+    el.textContent = labels[next] || 'not synced';
+    el.classList.remove('is-error', 'is-pending', 'is-ok');
+    if (next === 'error') el.classList.add('is-error');
+    else if (next === 'saving' || next === 'loading') el.classList.add('is-pending');
+    else if (next === 'saved') el.classList.add('is-ok');
+}
+
 async function saveStateNow() {
     if (!hydrateDone || replayRunning || !clay) return;
     if (autosaveInFlight) {
@@ -254,8 +273,9 @@ async function saveStateNow() {
         return;
     }
     autosaveInFlight = true;
+    setSaveStatus('saving');
     try {
-        await fetch(SAVE_ENDPOINT, {
+        const resp = await fetch(SAVE_ENDPOINT, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -263,7 +283,10 @@ async function saveStateNow() {
                 state: buildPersistedState()
             })
         });
+        if (!resp.ok) throw new Error(`save failed: ${resp.status}`);
+        setSaveStatus('saved');
     } catch (error) {
+        setSaveStatus('error');
         showStudioToast('autosave failed');
     } finally {
         autosaveInFlight = false;
@@ -285,12 +308,19 @@ function scheduleAutosave(_reason = 'change') {
 
 async function hydrateStateFromCloud() {
     const sessionId = getSessionId();
+    setSaveStatus('loading');
     try {
         const resp = await fetch(`${SAVE_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}`);
-        if (!resp.ok) return;
+        if (!resp.ok) {
+            setSaveStatus('error');
+            return;
+        }
         const payload = await resp.json();
         const state = payload?.state;
-        if (!state || typeof state !== 'object') return;
+        if (!state || typeof state !== 'object') {
+            setSaveStatus('saved');
+            return;
+        }
 
         if (typeof state.isDarkMode === 'boolean' && state.isDarkMode !== isDarkMode) {
             isDarkMode = state.isDarkMode;
@@ -345,8 +375,10 @@ async function hydrateStateFromCloud() {
         clay.setBrushSize(sculptRadius);
         applyStudioSwatch(currentSwatchId, true);
         syncToolStripUI();
+        setSaveStatus('saved');
         showStudioToast('restored your last clay session');
     } catch (error) {
+        setSaveStatus('error');
         showStudioToast('could not load saved session');
     } finally {
         hydrateDone = true;
@@ -533,10 +565,19 @@ function makeUI() {
     exportBtn.textContent = 'export sticker';
     exportBtn.onclick = (ev) => exportWithPreset('sticker', ev);
 
+    const saveWrap = document.createElement('div');
+    saveWrap.className = 'studio-control-group studio-dock__segment';
+    const saveCap = document.createElement('span');
+    saveCap.className = 'studio-dock-cap studio-dock-cap--save';
+    saveCap.id = 'save-status';
+    saveWrap.appendChild(saveCap);
+
     ctrl.appendChild(sizeWrap);
     ctrl.appendChild(strWrap);
     ctrl.appendChild(replayBtn);
     ctrl.appendChild(exportBtn);
+    ctrl.appendChild(saveWrap);
+    setSaveStatus(saveStatus);
 
     syncToolStripUI();
 }

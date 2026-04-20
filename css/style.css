@@ -485,6 +485,36 @@ canvas:active {
     margin-bottom: 2px;
 }
 
+.studio-dock-cap--save {
+    margin-bottom: 0;
+    min-width: 68px;
+    text-align: center;
+    opacity: 0.75;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.studio-dock-cap--save.is-pending {
+    opacity: 0.95;
+}
+
+.studio-dock-cap--save.is-ok {
+    color: rgba(180, 255, 200, 0.72);
+    opacity: 0.95;
+}
+
+.studio-dock-cap--save.is-error {
+    color: rgba(255, 140, 140, 0.9);
+    opacity: 1;
+}
+
+body[data-theme="light"] .studio-dock-cap--save.is-ok {
+    color: rgba(22, 120, 52, 0.72);
+}
+
+body[data-theme="light"] .studio-dock-cap--save.is-error {
+    color: rgba(164, 38, 38, 0.82);
+}
+
 .studio-control-group {
     min-width: 0;
 }
