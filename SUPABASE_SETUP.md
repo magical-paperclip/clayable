@@ -18,16 +18,25 @@ create index if not exists clayable_sessions_updated_at_idx
   on public.clayable_sessions (updated_at desc);
 ```
 
-## 2) Set Vercel environment variables
+## 2) Copy the Supabase API values
 
-In your Vercel project settings, add:
+In Supabase open **Project Settings → API**:
 
-- `SUPABASE_URL` (example: `https://xxxx.supabase.co`)
-- `SUPABASE_SERVICE_ROLE_KEY` (service role secret from Supabase)
+- **Project URL** → this is `SUPABASE_URL` (looks like `https://xxxx.supabase.co`).
+- **`service_role` `secret`** → this is `SUPABASE_SERVICE_ROLE_KEY`.
 
-These are used by `api/state.js`.
+Do **not** use the **anon** / **publishable** key for this serverless route. The app’s `api/state.js` needs the service role so it can upsert rows on behalf of each anonymous browser session.
 
-## 3) Deploy
+## 3) Set Vercel environment variables
+
+In **Vercel → your project → Settings → Environment Variables**, add:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+See `vercel-env.example` for a checklist. Redeploy after saving.
+
+## 4) Deploy
 
 Push to `main` (or your deploy branch). Vercel will deploy the API route:
 

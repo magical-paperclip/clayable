@@ -1,0 +1,9 @@
+# Copy these into Vercel → Project → Settings → Environment Variables.
+# Do NOT commit real secrets to git.
+
+# Supabase → Project Settings → API → Project URL
+SUPABASE_URL=
+
+# Supabase → Project Settings → API → service_role (secret)
+# This must never appear in frontend code or public repos.
+SUPABASE_SERVICE_ROLE_KEY=
