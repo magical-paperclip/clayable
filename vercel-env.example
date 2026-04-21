@@ -1,9 +1,10 @@
-# Copy these into Vercel → Project → Settings → Environment Variables.
-# Do NOT commit real secrets to git.
+# Copy into Vercel → Project → Settings → Environment Variables.
+# Do not commit real secrets.
 
-# Supabase → Project Settings → API → Project URL
-SUPABASE_URL=
+# Upstash Redis → database → REST API tab
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 
-# Supabase → Project Settings → API → service_role (secret)
-# This must never appear in frontend code or public repos.
-SUPABASE_SERVICE_ROLE_KEY=
+# Optional: if you created Upstash via Vercel Storage integration, these may exist instead:
+# KV_REST_API_URL=
+# KV_REST_API_TOKEN=
