@@ -1,13 +1,39 @@
 import * as THREE from './three.module.js';
 import { ClaySculptor } from './clay.js';
-import { OrbitControls } from './OrbitControls.js';
 import { EmojiExporter } from './Exporter.js';
 
 let canvas, cam, scene, renderer, controls;
-let mouse = new THREE.Vector2();
-let dragging = false;
-let autoSpin = false;
-const spinSpeed = 0.001;
+let autoSpin = true;
+let angularVelocity = 0.003;
+const SPIN_ACCEL = 0.0005;
+const SPIN_MAX   = 0.03;
+const SPIN_MIN   = -0.03;
+
+// --- Pottery wheel input state ---
+const keysHeld = new Set();
+
+// Each hand has a Y position along the clay surface
+// Left hand = outside (push inward), Right hand = inside (pull outward)
+const leftHand  = { y: 0 };
+const rightHand = { y: 0 };
+
+const HAND_SPEED       = 0.04;   // units/frame when moving up/down
+const SCULPT_STRENGTH  = 0.006;  // deformation per frame while key held
+const HAND_BRUSH_SIZE  = 0.9;    // brush radius for pottery hands
+const CLAY_RADIUS      = 2.0;    // nominal sphere radius
+
+// Cross-section canvas
+let xsCanvas, xsCtx;
+
+// Camera pitch (trackpad vertical scroll tilts view up/down)
+let camPitch = 0;
+const CAM_PITCH_MAX  =  Math.PI / 2 - 0.05;
+const CAM_PITCH_MIN  = -Math.PI / 2 + 0.05;
+const CAM_DISTANCE   = 5;
+
+// Left hand sits 45° to the left of front, right hand 45° to the right (local space)
+const LEFT_HAND_ANGLE  = -Math.PI / 4;   // -45°
+const RIGHT_HAND_ANGLE = -Math.PI / 4;   // -45°
 let exporter = null;
 
 const VOID_BG = 0x000000;
@@ -56,7 +82,6 @@ let ambLight, keyLight, rimLight;
 let sculptStrength = 0.11;
 let sculptRadius = 0.5;
 let currentSwatchId = 'terracotta';
-let rc = new THREE.Raycaster();
 let initialized = false;
 let lastStretchToastAt = 0;
 
@@ -430,17 +455,8 @@ async function init() {
 
     exporter = new EmojiExporter(scene, clay);
 
-    controls = new OrbitControls(cam, renderer.domElement);
-    controls.enableDamping = true;
-    controls.enablePan = false;
-    const clayRadius = clay.ball.geometry.parameters.radius;
-    controls.minDistance = Math.max(0.5, clayRadius * 1.03);
-    controls.maxDistance = 15;
-    controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
-        MIDDLE: THREE.MOUSE.ROTATE,
-        RIGHT: THREE.MOUSE.ROTATE
-    };
+    // No orbit controls — pottery wheel is always spinning, camera is fixed
+    controls = null;
 
     setupEvents();
     makeUI();
@@ -450,6 +466,34 @@ async function init() {
     await hydrateStateFromCloud();
     if (!hydrateDone) hydrateDone = true;
     animate();
+    showPotteryHint();
+}
+
+function showPotteryHint() {
+    const hint = document.createElement('div');
+    hint.className = 'pottery-hint';
+    hint.innerHTML = `
+        <div class="pottery-hint__hand">
+            <span>left hand</span>
+            <div class="pottery-hint__keys">
+                <span class="pottery-hint__key">3</span>
+                <span class="pottery-hint__key">q · e</span>
+                <span class="pottery-hint__key">c</span>
+            </div>
+            <span style="opacity:0.5;font-size:9px">up · pull · push · down</span>
+        </div>
+        <div class="pottery-hint__hand">
+            <span>right hand</span>
+            <div class="pottery-hint__keys">
+                <span class="pottery-hint__key">0</span>
+                <span class="pottery-hint__key">o · [</span>
+                <span class="pottery-hint__key">m</span>
+            </div>
+            <span style="opacity:0.5;font-size:9px">up · push · pull · down</span>
+        </div>
+    `;
+    document.body.appendChild(hint);
+    hint.addEventListener('animationend', () => hint.remove());
 }
 
 function makeUI() {
@@ -688,14 +732,18 @@ function showHelpModal() {
         <div class="info-stack" role="dialog" aria-modal="true" aria-labelledby="help-title">
             <p id="help-title" class="info-heading">help</p>
             <ul class="help-list">
-                <li>sculpt: shift + click + drag</li>
-                <li>rotate: drag</li>
-                <li>zoom: scroll</li>
+                <li>tilt view up / down: trackpad scroll</li>
+                <li>spin left / right faster: tab / \</li>
+                <li>left hand up / down: 3 / c</li>
+                <li>left hand pull outward: hold q</li>
+                <li>left hand push inward: hold e</li>
+                <li>right hand up / down: 0 / m</li>
+                <li>right hand push outward: hold o</li>
+                <li>right hand pull inward: hold [</li>
                 <li>reset: r</li>
                 <li>refine mesh: f</li>
-                <li>modes: push pull smooth pick inflate (left bar or keys 1–5)</li>
-                <li>gallery light / studio dark: t or light · beside help</li>
-                <li>community: link beside ? (opens in new tab)</li>
+                <li>theme: t</li>
+                <li>cross section: live view, bottom-right</li>
             </ul>
             <button type="button" class="info-dismiss">close</button>
         </div>
@@ -756,9 +804,21 @@ function updatePageStyles() {
     }
 }
 
-function onKey(e) {
-    if (e.key.toLowerCase() === 'r') reset();
-    if (e.key.toLowerCase() === 'f' && clay) {
+// Left hand:  3=up  c=down  q=pull outward  e=push inward
+// Right hand: 0=up  m=down  o=push outward  [=pull inward
+const POTTERY_KEYS = new Set(['3','c','q','e','0','m','o','[','Tab','\\']);
+
+function onKeyDown(e) {
+    const k = e.key;
+    if (POTTERY_KEYS.has(k)) {
+        e.preventDefault();
+        keysHeld.add(k);
+        return;
+    }
+    const kl = k.toLowerCase();
+    if (kl === 'r') reset();
+    if (kl === 't') toggleDarkMode();
+    if (kl === 'f' && clay) {
         if (!clay.refineMesh()) {
             showStudioToast('already at max mesh density');
         } else {
@@ -766,16 +826,94 @@ function onKey(e) {
             showStudioToast('refined—vertices redistributed');
         }
     }
-    if (e.key === ' ') {
-        e.preventDefault();
-        autoSpin = !autoSpin;
-    }
-    if (e.key.toLowerCase() === 't') toggleDarkMode();
+}
 
-    const toolMap = { '1': 'push', '2': 'pull', '3': 'smooth', '4': 'pick', '5': 'inflate' };
-    if (toolMap[e.key]) {
-        selectSculptTool(toolMap[e.key]);
+function onKeyUp(e) {
+    keysHeld.delete(e.key);
+}
+
+/**
+/**
+ * Called every frame. Reads held keys and applies pottery-wheel sculpting.
+ * Left hand fixed at -45° local, right hand at +45° local.
+ * Both positions are un-rotated into world space by the current spin angle.
+ */
+function tickPotteryInput() {
+    if (!clay) return;
+
+    // Move hand Y positions
+    if (keysHeld.has('3')) leftHand.y  = Math.min(leftHand.y  + HAND_SPEED, CLAY_RADIUS * 0.95);
+    if (keysHeld.has('c')) leftHand.y  = Math.max(leftHand.y  - HAND_SPEED, -CLAY_RADIUS * 0.95);
+    if (keysHeld.has('0')) rightHand.y = Math.min(rightHand.y + HAND_SPEED, CLAY_RADIUS * 0.95);
+    if (keysHeld.has('m')) rightHand.y = Math.max(rightHand.y - HAND_SPEED, -CLAY_RADIUS * 0.95);
+
+    const leftR  = getSurfaceRadius(leftHand.y);
+    const rightR = getSurfaceRadius(rightHand.y);
+    const spin   = clay.ball.rotation.y;
+
+    // Convert fixed local angles to world-space XZ by adding spin rotation
+    const leftWorldAngle  = spin + LEFT_HAND_ANGLE;
+    const rightWorldAngle = spin + RIGHT_HAND_ANGLE;
+
+    // Left hand push inward (e)
+    if (keysHeld.has('e')) {
+        const r = leftR + 0.05;
+        clay.setTool('push');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(Math.sin(leftWorldAngle) * r, leftHand.y, Math.cos(leftWorldAngle) * r, false);
+        scheduleAutosave('pottery-left-push');
     }
+
+    // Left hand pull outward (q)
+    if (keysHeld.has('q')) {
+        const r = Math.max(leftR - 0.05, 0.1);
+        clay.setTool('pull');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(Math.sin(leftWorldAngle) * r, leftHand.y, Math.cos(leftWorldAngle) * r, false);
+        scheduleAutosave('pottery-left-pull');
+    }
+
+    // Right hand push outward (o)
+    if (keysHeld.has('o')) {
+        const r = Math.max(rightR - 0.05, 0.1);
+        clay.setTool('pull');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(Math.sin(rightWorldAngle) * r, rightHand.y, Math.cos(rightWorldAngle) * r, false);
+        scheduleAutosave('pottery-right-push');
+    }
+
+    // Right hand pull inward ([)
+    if (keysHeld.has('[')) {
+        const r = rightR + 0.05;
+        clay.setTool('push');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(Math.sin(rightWorldAngle) * r, rightHand.y, Math.cos(rightWorldAngle) * r, false);
+        scheduleAutosave('pottery-right-pull');
+    }
+}
+
+/**
+ * Sample the clay mesh to find approximate surface radius at a given Y.
+ * Returns the average distance from origin for verts near that Y band.
+ */
+function getSurfaceRadius(targetY) {
+    if (!clay) return CLAY_RADIUS;
+    const verts = clay.verts;
+    const band = 0.3;
+    let sum = 0, count = 0;
+    for (let i = 0; i < verts.length; i += 3) {
+        const vy = verts[i + 1];
+        if (Math.abs(vy - targetY) < band) {
+            const r = Math.hypot(verts[i], verts[i + 2]);
+            sum += r;
+            count++;
+        }
+    }
+    return count > 0 ? sum / count : CLAY_RADIUS;
 }
 
 function resetMesh() {
@@ -942,130 +1080,217 @@ function resize() {
     syncSceneAndRendererBg();
 }
 
-function onTouchStart(e) {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-        dragging = true;
-        const touch = e.touches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        rc.setFromCamera(mouse, cam);
-        const hits = rc.intersectObject(clay.ball);
-        if (hits.length > 0) {
-            const pt = hits[0].point;
-            clay.moldClay(pt.x, pt.y, pt.z, true);
-            scheduleAutosave('touch-start');
-        }
-    }
-}
-
-function onTouchMove(e) {
-    e.preventDefault();
-    if (dragging && e.touches.length === 1) {
-        const touch = e.touches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        rc.setFromCamera(mouse, cam);
-        const hits = rc.intersectObject(clay.ball);
-        if (hits.length > 0) {
-            const pt = hits[0].point;
-            clay.moldClay(pt.x, pt.y, pt.z, true);
-            scheduleAutosave('touch-move');
-        }
-    }
-}
-
-function onTouchEnd(e) {
-    e.preventDefault();
-    dragging = false;
-    if (clay) clay.endPickStroke();
-}
 
 function animate() {
     requestAnimationFrame(animate);
-    if (autoSpin && !dragging) clay.ball.rotation.y += spinSpeed;
-    if (controls) controls.update();
+    if (autoSpin) {
+        if (keysHeld.has('Tab')) angularVelocity = Math.max(angularVelocity - SPIN_ACCEL, SPIN_MIN);
+        if (keysHeld.has('\\'))  angularVelocity = Math.min(angularVelocity + SPIN_ACCEL, SPIN_MAX);
+        clay.ball.rotation.y += angularVelocity;
+    }
+    tickPotteryInput();
     if (renderer && scene && cam) renderer.render(scene, cam);
+    drawCrossSection();
 }
 
 function setupEvents() {
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', resize);
-    window.addEventListener('touchstart', onTouchStart, { passive: false });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onTouchEnd, { passive: false });
-    setupSculptingMode();
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup',   onKeyUp);
+    window.addEventListener('resize',  resize);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    initCrossSection();
 }
 
-function setupSculptingMode() {
-    let sculpting = false;
+function onWheel(e) {
+    e.preventDefault();
+    // deltaY: scroll up = negative = tilt camera up (pitch increases)
+    const sensitivity = 0.003;
+    camPitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitch - e.deltaY * sensitivity));
+    updateCameraPosition();
+}
 
-    renderer.domElement.addEventListener('mousedown', (e) => {
-        if (e.button === 0 && e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            rc.setFromCamera(mouse, cam);
-            const hits = rc.intersectObject(clay.ball);
-            if (hits.length > 0) {
-                sculpting = true;
-                controls.enabled = false;
-                const pt = hits[0].point;
-                clay.moldClay(pt.x, pt.y, pt.z, false);
-                scheduleAutosave('sculpt-start');
-            }
-        }
-    });
+function updateCameraPosition() {
+    // Orbit camera around origin at fixed distance, driven by pitch only
+    cam.position.x = 0;
+    cam.position.y = Math.sin(camPitch) * CAM_DISTANCE;
+    cam.position.z = Math.cos(camPitch) * CAM_DISTANCE;
+    cam.lookAt(0, 0, 0);
+}
 
-    renderer.domElement.addEventListener('mousemove', (e) => {
-        if (sculpting && e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            rc.setFromCamera(mouse, cam);
-            const hits = rc.intersectObject(clay.ball);
-            if (hits.length > 0) {
-                const pt = hits[0].point;
-                clay.moldClay(pt.x, pt.y, pt.z, false);
-                scheduleAutosave('sculpt-move');
-            }
-        }
-    });
+function initCrossSection() {
+    xsCanvas = document.createElement('canvas');
+    xsCanvas.id = 'cross-section';
+    xsCanvas.width  = 180;
+    xsCanvas.height = 320;
+    document.body.appendChild(xsCanvas);
+    xsCtx = xsCanvas.getContext('2d');
+}
 
-    renderer.domElement.addEventListener('mouseup', (e) => {
-        if (e.button === 0 && sculpting) {
-            e.preventDefault();
-            e.stopPropagation();
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-            maybeShowStretchToast();
-        }
-    });
+/**
+ * Draw a live 2D silhouette cross-section of the clay.
+ * Samples verts near the X=0 plane (after accounting for spin),
+ * bins them by Y into a profile, and draws left/right mirror.
+ */
+function drawCrossSection() {
+    if (!xsCtx || !clay) return;
 
-    renderer.domElement.addEventListener('mouseleave', () => {
-        if (sculpting) {
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-        }
-    });
+    const W = xsCanvas.width;
+    const H = xsCanvas.height;
+    xsCtx.clearRect(0, 0, W, H);
 
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 'Shift' && sculpting) {
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-        }
-    });
+    const isDark = document.body.dataset.theme !== 'light';
+    xsCtx.fillStyle = isDark ? 'rgba(12,12,12,0.72)' : 'rgba(245,245,245,0.82)';
+    xsCtx.fillRect(0, 0, W, H);
 
-    renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    const verts    = clay.verts;
+    const spinAngle = clay.ball.rotation.y;
+    const cosA = Math.cos(-spinAngle);
+    const sinA = Math.sin(-spinAngle);
+
+    const BINS      = 80;
+    const CLAY_MAX_Y = CLAY_RADIUS * 1.6;
+    const radii  = new Float32Array(BINS).fill(0);
+    const counts = new Int32Array(BINS);
+    const sliceTol = 0.25;
+
+    for (let i = 0; i < verts.length; i += 3) {
+        const wx = verts[i], wy = verts[i + 1], wz = verts[i + 2];
+        const lx = cosA * wx + sinA * wz;
+        if (Math.abs(lx) > sliceTol) continue;
+        const lz = -sinA * wx + cosA * wz;
+        const r  = Math.abs(lz);
+        const binY = Math.floor(((wy + CLAY_MAX_Y) / (2 * CLAY_MAX_Y)) * BINS);
+        if (binY < 0 || binY >= BINS) continue;
+        radii[binY] += r;
+        counts[binY]++;
+    }
+
+    const profile = new Float32Array(BINS);
+    for (let b = 0; b < BINS; b++) {
+        profile[b] = counts[b] > 0 ? radii[b] / counts[b] : 0;
+    }
+
+    const padX = 16, padY = 20;
+    const drawW = W - padX * 2;
+    const drawH = H - padY * 2 - 28; // reserve bottom for speed meter
+    const maxR  = CLAY_RADIUS * 1.2;
+    const cx    = W / 2;
+
+    function toCanvasX(r)   { return cx + (r / maxR) * (drawW / 2); }
+    function toCanvasXL(r)  { return cx - (r / maxR) * (drawW / 2); }
+    function toCanvasY(bin) { return padY + drawH - (bin / BINS) * drawH; }
+
+    // Silhouette fill + stroke
+    const clayColor = clay.ball.material.color;
+    const hexStr = '#' + clayColor.getHexString();
+
+    xsCtx.beginPath();
+    let started = false;
+    for (let b = 0; b < BINS; b++) {
+        if (profile[b] < 0.01) continue;
+        const x = toCanvasX(profile[b]);
+        const y = toCanvasY(b);
+        if (!started) { xsCtx.moveTo(x, y); started = true; }
+        else xsCtx.lineTo(x, y);
+    }
+    for (let b = BINS - 1; b >= 0; b--) {
+        if (profile[b] < 0.01) continue;
+        xsCtx.lineTo(toCanvasXL(profile[b]), toCanvasY(b));
+    }
+    xsCtx.closePath();
+    xsCtx.fillStyle = hexStr + '55';
+    xsCtx.fill();
+    xsCtx.strokeStyle = hexStr;
+    xsCtx.lineWidth = 1.5;
+    xsCtx.stroke();
+
+    // Centre axis
+    xsCtx.beginPath();
+    xsCtx.moveTo(cx, padY);
+    xsCtx.lineTo(cx, padY + drawH);
+    xsCtx.strokeStyle = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+    xsCtx.lineWidth = 0.5;
+    xsCtx.setLineDash([3, 4]);
+    xsCtx.stroke();
+    xsCtx.setLineDash([]);
+
+    // --- Hand markers ---
+    // The cross-section slice is always at local Z axis (no spin offset).
+    // Hands sit at ±45° in local space. We project them onto the slice by
+    // taking their radial distance at the hand's local angle and showing
+    // them at (cos 45° × r) on the appropriate side.
+    const cos45 = Math.cos(Math.PI / 4); // ≈ 0.707 — depth into slice plane
+
+    const labelColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+    const leftBin  = Math.max(0, Math.min(BINS - 1, Math.floor(((leftHand.y  + CLAY_MAX_Y) / (2 * CLAY_MAX_Y)) * BINS)));
+    const rightBin = Math.max(0, Math.min(BINS - 1, Math.floor(((rightHand.y + CLAY_MAX_Y) / (2 * CLAY_MAX_Y)) * BINS)));
+
+    // Left hand — appears on left side of silhouette at 45° projected radius
+    const leftSurfR  = profile[leftBin]  || CLAY_RADIUS;
+    const leftProjR  = leftSurfR * cos45;
+    const lyCanvas   = toCanvasY(leftBin);
+    const lxCanvas   = toCanvasXL(Math.min(leftProjR, maxR));
+    const leftActive = keysHeld.has('e') || keysHeld.has('q');
+    xsCtx.beginPath();
+    xsCtx.arc(lxCanvas, lyCanvas, 5, 0, Math.PI * 2);
+    xsCtx.fillStyle = leftActive ? '#ff6b6b' : 'rgba(255,100,100,0.65)';
+    xsCtx.fill();
+    xsCtx.fillStyle = labelColor;
+    xsCtx.font = '9px "JetBrains Mono", monospace';
+    xsCtx.textAlign = 'right';
+    xsCtx.fillText('L', lxCanvas - 9, lyCanvas + 3);
+
+    // Right hand — appears on right side
+    const rightSurfR  = profile[rightBin] || CLAY_RADIUS;
+    const rightProjR  = rightSurfR * cos45;
+    const ryCanvas    = toCanvasY(rightBin);
+    const rxCanvas    = toCanvasX(Math.min(rightProjR, maxR));
+    const rightActive = keysHeld.has('o') || keysHeld.has('[');
+    xsCtx.beginPath();
+    xsCtx.arc(rxCanvas, ryCanvas, 5, 0, Math.PI * 2);
+    xsCtx.fillStyle = rightActive ? '#6bcfff' : 'rgba(100,180,255,0.65)';
+    xsCtx.fill();
+    xsCtx.fillStyle = labelColor;
+    xsCtx.textAlign = 'left';
+    xsCtx.fillText('R', rxCanvas + 9, ryCanvas + 3);
+
+    // --- Speed meter ---
+    const meterY  = padY + drawH + 14;
+    const meterX  = padX;
+    const meterW  = W - padX * 2;
+    const meterH  = 6;
+    const meterCx = meterX + meterW / 2;
+
+    // Track background
+    xsCtx.fillStyle = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    xsCtx.beginPath();
+    xsCtx.roundRect(meterX, meterY, meterW, meterH, 3);
+    xsCtx.fill();
+
+    // Filled portion — centred, extends left (negative) or right (positive)
+    const norm = angularVelocity / SPIN_MAX; // -1 … +1
+    const barW = Math.abs(norm) * (meterW / 2);
+    const barX = norm >= 0 ? meterCx : meterCx - barW;
+    const speedHue = norm >= 0 ? '210, 180, 255' : '255, 160, 120';
+    xsCtx.fillStyle = `rgba(${speedHue}, 0.85)`;
+    xsCtx.beginPath();
+    xsCtx.roundRect(barX, meterY, barW, meterH, 3);
+    xsCtx.fill();
+
+    // Centre tick
+    xsCtx.fillStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+    xsCtx.fillRect(meterCx - 0.5, meterY - 2, 1, meterH + 4);
+
+    // Speed label
+    const rps = Math.abs(angularVelocity) / (2 * Math.PI) * 60;
+    xsCtx.fillStyle = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+    xsCtx.font = '8px "JetBrains Mono", monospace';
+    xsCtx.textAlign = 'center';
+    xsCtx.fillText(`${rps.toFixed(1)} rpm  ${angularVelocity >= 0 ? '▶' : '◀'}`, meterCx, meterY + meterH + 10);
+
+    // Panel label
+    xsCtx.fillStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+    xsCtx.fillText('cross section', meterCx, H - 3);
 }
 
 window.addEventListener('DOMContentLoaded', init);
