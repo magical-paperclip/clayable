@@ -1,13 +1,39 @@
 import * as THREE from './three.module.js';
 import { ClaySculptor } from './clay.js';
-import { OrbitControls } from './OrbitControls.js';
 import { EmojiExporter } from './Exporter.js';
 
 let canvas, cam, scene, renderer, controls;
-let mouse = new THREE.Vector2();
-let dragging = false;
-let autoSpin = false;
-const spinSpeed = 0.001;
+let autoSpin = true;
+let angularVelocity = 0.04;
+const SPIN_ACCEL = 0.004;
+const SPIN_MAX   = 0.30;
+const SPIN_MIN   = -0.30;
+
+// --- Mouse-based input state ---
+const keysHeld = new Set();
+const mouse = new THREE.Vector2();
+const rc    = new THREE.Raycaster();
+
+const SCULPT_STRENGTH = 0.0008;
+let HAND_BRUSH_SIZE = 0.9;
+const CLAY_RADIUS     = 2.0;
+
+// Cross-section canvas — removed
+// Brush aperture visualiser (3D circle projected onto clay surface)
+let brushMesh = null;
+
+// Camera pitch (right-click drag tilts view up/down)
+let camPitch = 0;
+const CAM_PITCH_MAX = Math.PI / 2 - 0.05;
+const CAM_PITCH_MIN = -Math.PI / 2 + 0.05;
+const CAM_DISTANCE  = 5;
+
+// Right-click drag state
+let rightDragging  = false;
+let lastRightY     = 0;
+
+// Screen lock (p key)
+let screenLocked = false;
 let exporter = null;
 
 const VOID_BG = 0x000000;
@@ -56,7 +82,6 @@ let ambLight, keyLight, rimLight;
 let sculptStrength = 0.11;
 let sculptRadius = 0.5;
 let currentSwatchId = 'terracotta';
-let rc = new THREE.Raycaster();
 let initialized = false;
 let lastStretchToastAt = 0;
 
@@ -430,17 +455,8 @@ async function init() {
 
     exporter = new EmojiExporter(scene, clay);
 
-    controls = new OrbitControls(cam, renderer.domElement);
-    controls.enableDamping = true;
-    controls.enablePan = false;
-    const clayRadius = clay.ball.geometry.parameters.radius;
-    controls.minDistance = Math.max(0.5, clayRadius * 1.03);
-    controls.maxDistance = 15;
-    controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
-        MIDDLE: THREE.MOUSE.ROTATE,
-        RIGHT: THREE.MOUSE.ROTATE
-    };
+    // No orbit controls — pottery wheel is always spinning, camera is fixed
+    controls = null;
 
     setupEvents();
     makeUI();
@@ -450,6 +466,32 @@ async function init() {
     await hydrateStateFromCloud();
     if (!hydrateDone) hydrateDone = true;
     animate();
+    showPotteryHint();
+}
+
+function showPotteryHint() {
+    const hint = document.createElement('div');
+    hint.className = 'pottery-hint';
+    hint.innerHTML = `
+        <div class="pottery-hint__hand">
+            <span>sculpt</span>
+            <div class="pottery-hint__keys">
+                <span class="pottery-hint__key">q</span>
+                <span class="pottery-hint__key">e</span>
+            </div>
+            <span style="opacity:0.5;font-size:9px">add · remove (at mouse)</span>
+        </div>
+        <div class="pottery-hint__hand">
+            <span>wheel</span>
+            <div class="pottery-hint__keys">
+                <span class="pottery-hint__key">i</span>
+                <span class="pottery-hint__key">o</span>
+            </div>
+            <span style="opacity:0.5;font-size:9px">spin ◀ · spin ▶</span>
+        </div>
+    `;
+    document.body.appendChild(hint);
+    hint.addEventListener('animationend', () => hint.remove());
 }
 
 function makeUI() {
@@ -688,14 +730,15 @@ function showHelpModal() {
         <div class="info-stack" role="dialog" aria-modal="true" aria-labelledby="help-title">
             <p id="help-title" class="info-heading">help</p>
             <ul class="help-list">
-                <li>sculpt: shift + click + drag</li>
-                <li>rotate: drag</li>
-                <li>zoom: scroll</li>
+                <li>add clay: hold q (at mouse position)</li>
+                <li>remove clay: hold e (at mouse position)</li>
+                <li>brush size smaller / larger: i / o</li>
+                <li>look up / down: right-click drag</li>
+                <li>spin left / right faster: tab / [</li>
+                <li>lock screen: p (press again to unlock)</li>
                 <li>reset: r</li>
                 <li>refine mesh: f</li>
-                <li>modes: push pull smooth pick inflate (left bar or keys 1–5)</li>
-                <li>gallery light / studio dark: t or light · beside help</li>
-                <li>community: link beside ? (opens in new tab)</li>
+                <li>theme: t</li>
             </ul>
             <button type="button" class="info-dismiss">close</button>
         </div>
@@ -756,9 +799,29 @@ function updatePageStyles() {
     }
 }
 
-function onKey(e) {
-    if (e.key.toLowerCase() === 'r') reset();
-    if (e.key.toLowerCase() === 'f' && clay) {
+function onKeyDown(e) {
+    const k = e.key.toLowerCase();
+    if (screenLocked) {
+        if (k === 'p') { screenLocked = false; showStudioToast('screen unlocked'); }
+        return;
+    }
+    if (k === 'p') { screenLocked = true; showStudioToast('screen locked'); return; }
+    if (k === 'q' || k === 'e') { keysHeld.add(k); return; }
+    if (e.key === 'Tab') { e.preventDefault(); keysHeld.add('Tab'); return; }
+    if (e.key === '[')   { keysHeld.add('['); return; }
+    if (k === 'i') {
+        HAND_BRUSH_SIZE = Math.max(0.1, HAND_BRUSH_SIZE - 0.05);
+        showStudioToast(`brush size ${HAND_BRUSH_SIZE.toFixed(2)}`);
+        return;
+    }
+    if (k === 'o') {
+        HAND_BRUSH_SIZE = Math.min(3.0, HAND_BRUSH_SIZE + 0.05);
+        showStudioToast(`brush size ${HAND_BRUSH_SIZE.toFixed(2)}`);
+        return;
+    }
+    if (k === 'r') reset();
+    if (k === 't') toggleDarkMode();
+    if (k === 'f' && clay) {
         if (!clay.refineMesh()) {
             showStudioToast('already at max mesh density');
         } else {
@@ -766,15 +829,47 @@ function onKey(e) {
             showStudioToast('refined—vertices redistributed');
         }
     }
-    if (e.key === ' ') {
-        e.preventDefault();
-        autoSpin = !autoSpin;
-    }
-    if (e.key.toLowerCase() === 't') toggleDarkMode();
+}
 
-    const toolMap = { '1': 'push', '2': 'pull', '3': 'smooth', '4': 'pick', '5': 'inflate' };
-    if (toolMap[e.key]) {
-        selectSculptTool(toolMap[e.key]);
+function onKeyUp(e) {
+    keysHeld.delete(e.key === 'Tab' ? 'Tab' : e.key.toLowerCase() === '[' ? '[' : e.key.toLowerCase());
+}
+
+/**
+ * Called every frame. Raycasts mouse onto clay surface.
+ * q = add clay (pull), e = remove clay (push).
+ * i = spin left faster, o = spin right faster.
+ */
+function tickPotteryInput() {
+    if (!clay || screenLocked) return;
+
+    if (keysHeld.has('Tab')) angularVelocity = Math.max(angularVelocity - SPIN_ACCEL, SPIN_MIN);
+    if (keysHeld.has('['))   angularVelocity = Math.min(angularVelocity + SPIN_ACCEL, SPIN_MAX);
+
+    if (!keysHeld.has('q') && !keysHeld.has('e')) return;
+
+    rc.setFromCamera(mouse, cam);
+    const hits = rc.intersectObject(clay.ball);
+    if (hits.length === 0) return;
+    const pt = hits[0].point;
+
+    // Convert world-space hit to ball local space (undoes spin rotation)
+    clay.ball.updateMatrixWorld();
+    const local = pt.clone().applyMatrix4(new THREE.Matrix4().copy(clay.ball.matrixWorld).invert());
+
+    if (keysHeld.has('q')) {
+        clay.setTool('pull');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(local.x, local.y, local.z, false);
+        scheduleAutosave('add-clay');
+    }
+    if (keysHeld.has('e')) {
+        clay.setTool('push');
+        clay.setStrength(SCULPT_STRENGTH);
+        clay.setBrushSize(HAND_BRUSH_SIZE);
+        clay.moldClay(local.x, local.y, local.z, false);
+        scheduleAutosave('remove-clay');
     }
 }
 
@@ -942,130 +1037,185 @@ function resize() {
     syncSceneAndRendererBg();
 }
 
-function onTouchStart(e) {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-        dragging = true;
-        const touch = e.touches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        rc.setFromCamera(mouse, cam);
-        const hits = rc.intersectObject(clay.ball);
-        if (hits.length > 0) {
-            const pt = hits[0].point;
-            clay.moldClay(pt.x, pt.y, pt.z, true);
-            scheduleAutosave('touch-start');
-        }
-    }
-}
-
-function onTouchMove(e) {
-    e.preventDefault();
-    if (dragging && e.touches.length === 1) {
-        const touch = e.touches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        rc.setFromCamera(mouse, cam);
-        const hits = rc.intersectObject(clay.ball);
-        if (hits.length > 0) {
-            const pt = hits[0].point;
-            clay.moldClay(pt.x, pt.y, pt.z, true);
-            scheduleAutosave('touch-move');
-        }
-    }
-}
-
-function onTouchEnd(e) {
-    e.preventDefault();
-    dragging = false;
-    if (clay) clay.endPickStroke();
-}
 
 function animate() {
     requestAnimationFrame(animate);
-    if (autoSpin && !dragging) clay.ball.rotation.y += spinSpeed;
-    if (controls) controls.update();
+    if (autoSpin) {
+        clay.ball.rotation.y += angularVelocity;
+    }
+    tickPotteryInput();
+    updateBrushVisualiser();
+    drawSpeedometer();
     if (renderer && scene && cam) renderer.render(scene, cam);
 }
 
 function setupEvents() {
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', resize);
-    window.addEventListener('touchstart', onTouchStart, { passive: false });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onTouchEnd, { passive: false });
-    setupSculptingMode();
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup',   onKeyUp);
+    window.addEventListener('resize',  resize);
+
+    // Track mouse position for raycasting
+    window.addEventListener('mousemove', (e) => {
+        if (screenLocked) return;
+        mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        // Right-click drag → camera pitch
+        if (rightDragging) {
+            const dy = e.clientY - lastRightY;
+            lastRightY = e.clientY;
+            camPitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitch + dy * 0.005));
+            updateCameraPosition();
+        }
+    });
+
+    window.addEventListener('mousedown', (e) => {
+        if (e.button === 2) {
+            e.preventDefault();
+            rightDragging = true;
+            lastRightY = e.clientY;
+        }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (e.button === 2) rightDragging = false;
+    });
+
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    initBrushVisualiser();
+    initSpeedometer();
 }
 
-function setupSculptingMode() {
-    let sculpting = false;
+function updateCameraPosition() {
+    // Orbit camera around origin at fixed distance, driven by pitch only
+    cam.position.x = 0;
+    cam.position.y = Math.sin(camPitch) * CAM_DISTANCE;
+    cam.position.z = Math.cos(camPitch) * CAM_DISTANCE;
+    cam.lookAt(0, 0, 0);
+}
 
-    renderer.domElement.addEventListener('mousedown', (e) => {
-        if (e.button === 0 && e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            rc.setFromCamera(mouse, cam);
-            const hits = rc.intersectObject(clay.ball);
-            if (hits.length > 0) {
-                sculpting = true;
-                controls.enabled = false;
-                const pt = hits[0].point;
-                clay.moldClay(pt.x, pt.y, pt.z, false);
-                scheduleAutosave('sculpt-start');
-            }
-        }
+/**
+ * Creates a flat ring mesh that hovers on the clay surface
+ * to show the current brush aperture size.
+ */
+function initBrushVisualiser() {
+    const geo = new THREE.TorusGeometry(1, 0.018, 6, 64);
+    const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.55,
+        depthTest: false,
+        depthWrite: false
     });
+    brushMesh = new THREE.Mesh(geo, mat);
+    brushMesh.visible = false;
+    brushMesh.renderOrder = 999;
+    scene.add(brushMesh);
+}
 
-    renderer.domElement.addEventListener('mousemove', (e) => {
-        if (sculpting && e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            rc.setFromCamera(mouse, cam);
-            const hits = rc.intersectObject(clay.ball);
-            if (hits.length > 0) {
-                const pt = hits[0].point;
-                clay.moldClay(pt.x, pt.y, pt.z, false);
-                scheduleAutosave('sculpt-move');
-            }
-        }
-    });
+/**
+ * Each frame: raycast mouse onto clay, position and scale the ring
+ * to match HAND_BRUSH_SIZE, oriented to the surface normal.
+ */
+function updateBrushVisualiser() {
+    if (!brushMesh || !clay) return;
 
-    renderer.domElement.addEventListener('mouseup', (e) => {
-        if (e.button === 0 && sculpting) {
-            e.preventDefault();
-            e.stopPropagation();
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-            maybeShowStretchToast();
-        }
-    });
+    rc.setFromCamera(mouse, cam);
+    const hits = rc.intersectObject(clay.ball);
 
-    renderer.domElement.addEventListener('mouseleave', () => {
-        if (sculpting) {
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-        }
-    });
+    if (hits.length === 0) {
+        brushMesh.visible = false;
+        return;
+    }
 
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 'Shift' && sculpting) {
-            sculpting = false;
-            controls.enabled = true;
-            if (clay) clay.endPickStroke();
-        }
-    });
+    brushMesh.visible = true;
+    const hit = hits[0];
+    const pt  = hit.point;
+    const n   = hit.face.normal.clone()
+                    .transformDirection(clay.ball.matrixWorld)
+                    .normalize();
 
-    renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Offset ring slightly above surface so it doesn't z-fight
+    brushMesh.position.copy(pt).addScaledVector(n, 0.02);
+
+    // Scale ring radius to match brush size (TorusGeometry base radius = 1)
+    brushMesh.scale.setScalar(HAND_BRUSH_SIZE);
+
+    // Orient ring flat against the surface normal
+    brushMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+
+    // Colour: blue when adding, red when removing, white when idle
+    const isAdding   = keysHeld.has('q');
+    const isRemoving = keysHeld.has('e');
+    brushMesh.material.color.set(
+        isAdding   ? 0x6bcfff :
+        isRemoving ? 0xff6b6b :
+                     0xffffff
+    );
+    brushMesh.material.opacity = isAdding || isRemoving ? 0.8 : 0.45;
+}
+
+let spdCanvas, spdCtx;
+
+function initSpeedometer() {
+    spdCanvas = document.createElement('canvas');
+    spdCanvas.id = 'speedometer';
+    spdCanvas.width  = 160;
+    spdCanvas.height = 44;
+    document.body.appendChild(spdCanvas);
+    spdCtx = spdCanvas.getContext('2d');
+}
+
+function drawSpeedometer() {
+    if (!spdCtx) return;
+    const W = spdCanvas.width;
+    const H = spdCanvas.height;
+    spdCtx.clearRect(0, 0, W, H);
+
+    const isDark = document.body.dataset.theme !== 'light';
+    spdCtx.fillStyle = isDark ? 'rgba(12,12,12,0.72)' : 'rgba(245,245,245,0.82)';
+    // rounded rect background
+    spdCtx.beginPath();
+    spdCtx.roundRect(0, 0, W, H, 8);
+    spdCtx.fill();
+
+    const padX = 12, padY = 10;
+    const meterW  = W - padX * 2;
+    const meterH  = 6;
+    const meterY  = padY;
+    const meterCx = padX + meterW / 2;
+
+    // Track
+    spdCtx.fillStyle = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    spdCtx.beginPath();
+    spdCtx.roundRect(padX, meterY, meterW, meterH, 3);
+    spdCtx.fill();
+
+    // Bar — centred, extends left (neg) or right (pos)
+    const norm = angularVelocity / SPIN_MAX;
+    const barW = Math.abs(norm) * (meterW / 2);
+    const barX = norm >= 0 ? meterCx : meterCx - barW;
+    spdCtx.fillStyle = norm >= 0 ? 'rgba(107,207,255,0.85)' : 'rgba(255,107,107,0.85)';
+    spdCtx.beginPath();
+    spdCtx.roundRect(barX, meterY, Math.max(barW, 1), meterH, 3);
+    spdCtx.fill();
+
+    // Centre tick
+    spdCtx.fillStyle = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)';
+    spdCtx.fillRect(meterCx - 0.5, meterY - 2, 1, meterH + 4);
+
+    // RPM + direction label
+    const rps = Math.abs(angularVelocity) / (2 * Math.PI) * 60;
+    const dir = angularVelocity >= 0 ? '▶' : '◀';
+    spdCtx.fillStyle = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+    spdCtx.font = '9px "JetBrains Mono", monospace';
+    spdCtx.textAlign = 'center';
+    spdCtx.fillText(`${rps.toFixed(1)} rpm  ${dir}`, meterCx, meterY + meterH + 13);
+
+    // Label
+    spdCtx.fillStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+    spdCtx.fillText('wheel speed', meterCx, H - 2);
 }
 
 window.addEventListener('DOMContentLoaded', init);
