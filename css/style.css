@@ -971,28 +971,6 @@ body[data-theme="light"] .studio-slider:hover::-moz-range-thumb {
     }
 }
 
-/* ——— cross-section window ——— */
-#cross-section {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: var(--ui-z);
-    width: 180px;
-    height: 320px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.13);
-    box-shadow: 0 4px 32px rgba(0,0,0,0.38);
-    pointer-events: none;
-    opacity: 0.92;
-    transition: opacity 0.2s ease;
-}
-
-body[data-theme="light"] #cross-section {
-    border-color: rgba(0, 0, 0, 0.1);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-}
-
-/* pottery key hint strip */
 .pottery-hint {
     position: fixed;
     top: 50%;
@@ -1040,4 +1018,24 @@ body[data-theme="light"] #cross-section {
     letter-spacing: 0;
     min-width: 22px;
     text-align: center;
+}
+
+/* ——— speedometer ——— */
+#speedometer {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: var(--ui-z);
+    width: 160px;
+    height: 44px;
+    border-radius: 8px;
+    border: 0.5px solid rgba(255,255,255,0.13);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.32);
+    pointer-events: none;
+    opacity: 0.92;
+}
+
+body[data-theme="light"] #speedometer {
+    border-color: rgba(0,0,0,0.1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
